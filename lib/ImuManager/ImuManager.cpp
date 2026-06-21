@@ -5,6 +5,7 @@
 
 #include "pin_config.h"
 #include "imu_calib.h"
+#include <Preferences.h>
 
 namespace {
 constexpr uint8_t REG_SMPLRT_DIV = 0x19;
@@ -126,14 +127,18 @@ bool ImuManager::begin(bool calibrateOnBoot) {
   Serial.println("IMU raw-register ready.");
 
 #if IMU_USE_STATIC_OFFSETS
-  // Gunakan offset statik hasil kalibrasi — robot tidak perlu diam saat boot.
-  _gyroOffsetX = IMU_GYRO_OFFSET_X;
-  _gyroOffsetY = IMU_GYRO_OFFSET_Y;
-  _gyroOffsetZ = IMU_GYRO_OFFSET_Z;
+  // Load offsets from NVS Preferences (if they exist), falling back to static ones
+  Preferences prefs;
+  prefs.begin("imu_calib", true); // read-only
+  _gyroOffsetX = prefs.getFloat("ox", IMU_GYRO_OFFSET_X);
+  _gyroOffsetY = prefs.getFloat("oy", IMU_GYRO_OFFSET_Y);
+  _gyroOffsetZ = prefs.getFloat("oz", IMU_GYRO_OFFSET_Z);
+  prefs.end();
+
   _lastRawYawDeg = 0.0f;
   _yawOffsetDeg  = 0.0f;
   _telemetry.yawDeg = 0.0f;
-  Serial.print("IMU static offsets loaded: X=");
+  Serial.print("IMU offsets loaded (NVS/Static): X=");
   Serial.print(_gyroOffsetX, 4);
   Serial.print(" Y=");
   Serial.print(_gyroOffsetY, 4);
@@ -190,7 +195,7 @@ void ImuManager::update() {
   _pitchEstimateDeg = COMPLEMENTARY_ALPHA * (_pitchEstimateDeg + _telemetry.gyroY * dtSec) +
                       (1.0f - COMPLEMENTARY_ALPHA) * accelPitchDeg;
   float gyroZFiltered = _telemetry.gyroZ;
-  if (fabsf(gyroZFiltered) < 0.15f) {
+  if (fabsf(gyroZFiltered) < 0.25f) {
     gyroZFiltered = 0.0f;
   }
   _lastRawYawDeg = wrap180(_lastRawYawDeg + (gyroZFiltered * dtSec));
@@ -262,6 +267,15 @@ void ImuManager::updateCalibration(uint32_t nowUs) {
   _yawOffsetDeg = 0.0f;
   _telemetry.yawDeg = 0.0f;
   _calibrating = false;
+
+  // Save new offsets to NVS Preferences
+  Preferences prefs;
+  prefs.begin("imu_calib", false); // read-write
+  prefs.putFloat("ox", _gyroOffsetX);
+  prefs.putFloat("oy", _gyroOffsetY);
+  prefs.putFloat("oz", _gyroOffsetZ);
+  prefs.end();
+  Serial.println("IMU gyro calibration saved to NVS.");
 
   // Sound buzzer double beep to indicate completion
   digitalWrite(PIN_BUZZER, HIGH);
