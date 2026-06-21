@@ -100,7 +100,7 @@
 #define ANTITIP_PITCH_BACKWARD_LIMIT   -45.0f   // Batas kemiringan jatuh ke belakang (derajat)
 #define ANTITIP_ROLL_LIMIT              45.0f   // Batas kemiringan jatuh ke samping kiri/kanan (derajat)
 #define ANTITIP_ROLL_LIFTER_THROTTLE    0.75f   // Posisi lifter saat jatuh samping (1.0 = UP, 0.0 = DOWN) agar tidak kepentok
-#define ANTITIP_ROLL_CLAW_ANGLE         20.0f   // Sudut claw saat membuka untuk menahan jatuh samping (derajat)
+#define ANTITIP_ROLL_CLAW_ANGLE         0.0f   // Sudut claw saat membuka untuk menahan jatuh samping (derajat)
 
 #define PIN_V_BATT          32
 #define PIN_BUZZER          23

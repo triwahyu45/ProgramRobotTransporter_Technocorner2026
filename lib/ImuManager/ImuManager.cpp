@@ -77,6 +77,9 @@ bool readMotionRaw(int16_t &ax, int16_t &ay, int16_t &az, int16_t &gx, int16_t &
 }
 
 bool ImuManager::begin(bool calibrateOnBoot) {
+  pinMode(PIN_BUZZER, OUTPUT);
+  digitalWrite(PIN_BUZZER, LOW);
+
   _ready = false;
   _calibrating = false;
   _lastCalibrationSampleUs = 0;
@@ -212,6 +215,11 @@ void ImuManager::startGyroCalibration() {
   _calibrationSumY = 0.0;
   _calibrationSumZ = 0.0;
   Serial.println("IMU gyro calibration started. Keep robot still.");
+
+  // Sound buzzer beep to indicate start
+  digitalWrite(PIN_BUZZER, HIGH);
+  delay(200);
+  digitalWrite(PIN_BUZZER, LOW);
 }
 
 bool ImuManager::isCalibrating() const {
@@ -249,6 +257,15 @@ void ImuManager::updateCalibration(uint32_t nowUs) {
   _yawOffsetDeg = 0.0f;
   _telemetry.yawDeg = 0.0f;
   _calibrating = false;
+
+  // Sound buzzer double beep to indicate completion
+  digitalWrite(PIN_BUZZER, HIGH);
+  delay(100);
+  digitalWrite(PIN_BUZZER, LOW);
+  delay(100);
+  digitalWrite(PIN_BUZZER, HIGH);
+  delay(100);
+  digitalWrite(PIN_BUZZER, LOW);
 
   Serial.print("IMU gyro calibration done. Offset dps: ");
   Serial.print(_gyroOffsetX, 4);

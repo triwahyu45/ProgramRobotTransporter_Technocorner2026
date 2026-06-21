@@ -32,7 +32,7 @@ constexpr bool INVERT_MOVE_X = false;
 constexpr bool INVERT_MOVE_Y = true;
 constexpr bool INVERT_ROTATE = false;
 constexpr bool YAW_CORRECTION_INVERTED_DEFAULT = true;
-constexpr bool DRIVE_CLOSED_LOOP_DEFAULT = false;
+constexpr bool DRIVE_CLOSED_LOOP_DEFAULT = true;
 constexpr bool RESET_BLUETOOTH_PAIRING_ON_BOOT = false;
 
 struct YawPid {
@@ -379,9 +379,9 @@ void startConfigMode() {
   
   btStop(); 
   
-  Serial.println("Connecting to Wi-Fi SSID: IG : @Triwahyu45");
+  Serial.println("Connecting to Wi-Fi SSID: IG : Triwahyu45");
   WiFi.mode(WIFI_STA);
-  WiFi.begin("IG : @Triwahyu45", "@Aguswahyu45");
+  WiFi.begin("IG : Triwahyu45", "@Aguswahyu45");
 
   uint32_t startAttemptTime = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - startAttemptTime < 10000) {
@@ -606,7 +606,7 @@ void toggleYawHoldFromGamepad() {
 void processGamepad(ControllerPtr ctl) {
   // ─── Trigger Config Mode (Share + Options ditahan 2 detik) ───
   static uint32_t configTriggerStartMs = 0;
-  if (ctl && ctl->isConnected() && ctl->miscSelect() && ctl->miscStart()) {
+  if (ctl && ctl->isConnected() && ctl->miscSelect() && ctl->miscStart() && !ctl->l1() && !ctl->r1()) {
     if (configTriggerStartMs == 0) {
       configTriggerStartMs = millis();
       Serial.println("[System] Tombol Share + Options ditekan. Tahan 2 detik untuk masuk mode kalibrasi WiFi...");
@@ -618,6 +618,22 @@ void processGamepad(ControllerPtr ctl) {
     }
   } else {
     configTriggerStartMs = 0;
+  }
+
+  // ─── Trigger IMU Gyro Calibration (L1 + R1 + Share + Options ditahan 3 detik) ───
+  static uint32_t imuCalibTriggerStartMs = 0;
+  if (ctl && ctl->isConnected() && ctl->l1() && ctl->r1() && ctl->miscSelect() && ctl->miscStart()) {
+    if (imuCalibTriggerStartMs == 0) {
+      imuCalibTriggerStartMs = millis();
+      Serial.println("[System] Tombol L1+R1+Share+Options ditekan. Tahan 3 detik untuk kalibrasi Gyro...");
+    } else if (millis() - imuCalibTriggerStartMs > 3000) {
+      Serial.println("[System] Memulai Kalibrasi Gyro dari Gamepad...");
+      stopWithBrake();
+      Imu().startGyroCalibration();
+      imuCalibTriggerStartMs = 0;
+    }
+  } else {
+    imuCalibTriggerStartMs = 0;
   }
 
   // ─── Gripper diupdate SELALU, bahkan saat calibrating / disconnect ───
