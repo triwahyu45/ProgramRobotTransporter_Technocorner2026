@@ -5,8 +5,8 @@
 
 namespace {
 constexpr uint32_t CONTROL_PERIOD_US = 25000;
-constexpr float KP = 42.0f;
-constexpr float KI = 9.0f;
+constexpr float KP = 120.0f;
+constexpr float KI = 40.0f;
 constexpr float INTEGRAL_LIMIT = 12000.0f;
 constexpr float RPM_FAULT_LIMIT = MAX_WHEEL_RPM * 1.65f;
 constexpr float RPM_DEADBAND = 1.0f;
@@ -138,7 +138,7 @@ int16_t WheelSpeedController::computeCommand(uint8_t wheel, float rpm, float mea
     return 0;
   }
 
-  const float feedForward = (rpm / MAX_WHEEL_RPM) * 26000.0f;
+  const float feedForward = (rpm / MAX_WHEEL_RPM) * 32767.0f;
   const float error = rpm - measured;
   _integral[wheel] = constrain(_integral[wheel] + (error * dtSec * KI), -INTEGRAL_LIMIT, INTEGRAL_LIMIT);
   return clampCommand(feedForward + (error * KP) + _integral[wheel]);

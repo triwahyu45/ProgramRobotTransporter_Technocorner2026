@@ -181,7 +181,11 @@ void ImuManager::update() {
                      (1.0f - COMPLEMENTARY_ALPHA) * accelRollDeg;
   _pitchEstimateDeg = COMPLEMENTARY_ALPHA * (_pitchEstimateDeg + _telemetry.gyroY * dtSec) +
                       (1.0f - COMPLEMENTARY_ALPHA) * accelPitchDeg;
-  _lastRawYawDeg = wrap180(_lastRawYawDeg + (_telemetry.gyroZ * dtSec));
+  float gyroZFiltered = _telemetry.gyroZ;
+  if (fabsf(gyroZFiltered) < 0.15f) {
+    gyroZFiltered = 0.0f;
+  }
+  _lastRawYawDeg = wrap180(_lastRawYawDeg + (gyroZFiltered * dtSec));
 
   _telemetry.rollDeg = _rollEstimateDeg;
   _telemetry.pitchDeg = _pitchEstimateDeg;

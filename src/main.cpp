@@ -23,8 +23,8 @@ constexpr uint32_t SERIAL_LINE_TIMEOUT_MS = 80;
 constexpr int STICK_DEADZONE = 60;
 constexpr int STICK_MAX = 512;
 constexpr float DPAD_MOVE_PERCENT = 100.0f;
-constexpr float MAX_DRIVE_PERCENT = 50.0f;
-constexpr float MAX_TURN_PERCENT = 35.0f;
+constexpr float MAX_DRIVE_PERCENT = 100.0f;
+constexpr float MAX_TURN_PERCENT = 45.0f;
 constexpr bool IDLE_YAW_HOLD_ENABLED_DEFAULT = true;
 constexpr float YAW_HOLD_DEADBAND_DEG = 2.0f;
 constexpr float IDLE_YAW_MAX_TURN_PERCENT = 18.0f;
@@ -402,8 +402,8 @@ void startConfigMode() {
     Serial.println(myIP);
   }
 
-  if (MDNS.begin("robot")) {
-    Serial.println("mDNS responder started at http://robot.local");
+  if (MDNS.begin("Triwahyu45Transporter")) {
+    Serial.println("mDNS responder started at http://Triwahyu45Transporter.local");
     MDNS.addService("http", "tcp", 80);
   } else {
     Serial.println("Error setting up MDNS responder!");
