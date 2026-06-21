@@ -114,7 +114,7 @@ bool ImuManager::begin(bool calibrateOnBoot) {
   }
 
   writeReg(REG_PWR_MGMT_1, 0x00);
-  writeReg(REG_CONFIG, 0x03);        // DLPF ~44 Hz gyro / ~42 Hz accel on MPU6050-like chips.
+  writeReg(REG_CONFIG, 0x02);        // DLPF ~98 Hz gyro / ~94 Hz accel (delay cut to 8ms for fast response).
   writeReg(REG_SMPLRT_DIV, 0x04);    // 200 Hz-ish.
   writeReg(REG_GYRO_CONFIG, 0x08);   // +/-500 dps.
   writeReg(REG_ACCEL_CONFIG, 0x08);  // +/-4g.
@@ -172,7 +172,12 @@ void ImuManager::update() {
   _telemetry.accelZ = static_cast<float>(azRaw) / ACCEL_SCALE_LSB_PER_G;
   _telemetry.gyroX = (static_cast<float>(gxRaw) / GYRO_SCALE_LSB_PER_DPS) - _gyroOffsetX;
   _telemetry.gyroY = (static_cast<float>(gyRaw) / GYRO_SCALE_LSB_PER_DPS) - _gyroOffsetY;
-  _telemetry.gyroZ = (static_cast<float>(gzRaw) / GYRO_SCALE_LSB_PER_DPS) - _gyroOffsetZ;
+  
+  // Gyro Z Low-pass filter to eliminate high-frequency chassis vibration noise
+  float rawGyroZ = (static_cast<float>(gzRaw) / GYRO_SCALE_LSB_PER_DPS) - _gyroOffsetZ;
+  static float filteredGyroZ = 0.0f;
+  filteredGyroZ = 0.85f * filteredGyroZ + 0.15f * rawGyroZ;
+  _telemetry.gyroZ = filteredGyroZ;
 
   const float accelRollDeg = atan2f(_telemetry.accelY, _telemetry.accelZ) * RAD_TO_DEG;
   const float accelPitchDeg =

@@ -40,6 +40,9 @@ void WheelSpeedController::setEnabled(bool enabled) {
   if (enabled) {
     _lastUpdateUs = micros();
     resetPid();
+    for (uint8_t i = 0; i < WHEEL_COUNT; ++i) {
+      _currentTargetRpm[i] = _targetRpm[i];
+    }
   }
 }
 
@@ -81,6 +84,7 @@ void WheelSpeedController::driveRobotPercent(float xPercent, float yPercent, flo
 void WheelSpeedController::stop() {
   for (uint8_t i = 0; i < WHEEL_COUNT; ++i) {
     _targetRpm[i] = 0.0f;
+    _currentTargetRpm[i] = 0.0f;
     _command[i] = 0;
     _integral[i] = 0.0f;
     _fault[i] = false;
@@ -111,6 +115,11 @@ void WheelSpeedController::update(uint32_t nowUs) {
   _lastUpdateUs = nowUs;
 
   const float dtSec = static_cast<float>(elapsedUs) / 1000000.0f;
+  
+  // Acceleration limit (slew rate limiter)
+  constexpr float MAX_ACCEL_RPM_PER_SEC = 250.0f;
+  const float maxChange = MAX_ACCEL_RPM_PER_SEC * dtSec;
+
   for (uint8_t wheel = 0; wheel < WHEEL_COUNT; ++wheel) {
     const EncoderSample sample = _encoders->sample(wheel, elapsedUs);
     _measuredRpm[wheel] = sample.rpm;
@@ -119,10 +128,21 @@ void WheelSpeedController::update(uint32_t nowUs) {
     if (_fault[wheel]) {
       _command[wheel] = 0;
       _integral[wheel] = 0.0f;
+      _currentTargetRpm[wheel] = 0.0f;
       continue;
     }
 
-    _command[wheel] = computeCommand(wheel, _targetRpm[wheel], _measuredRpm[wheel], dtSec);
+    // Slew rate limit target RPM
+    float diff = _targetRpm[wheel] - _currentTargetRpm[wheel];
+    if (diff > maxChange) {
+      _currentTargetRpm[wheel] += maxChange;
+    } else if (diff < -maxChange) {
+      _currentTargetRpm[wheel] -= maxChange;
+    } else {
+      _currentTargetRpm[wheel] = _targetRpm[wheel];
+    }
+
+    _command[wheel] = computeCommand(wheel, _currentTargetRpm[wheel], _measuredRpm[wheel], dtSec);
   }
 
   writeCommands();
@@ -141,7 +161,21 @@ int16_t WheelSpeedController::computeCommand(uint8_t wheel, float rpm, float mea
     return 0;
   }
 
-  const float feedForward = (rpm / MAX_WHEEL_RPM) * 32767.0f;
+  // Get wheel-specific deadband raw PWM offset
+  float minPwmRaw = 0.0f;
+  if (wheel == WHEEL_FL) minPwmRaw = (MOTOR_MIN_PWM_FL / 100.0f) * 32767.0f;
+  else if (wheel == WHEEL_FR) minPwmRaw = (MOTOR_MIN_PWM_FR / 100.0f) * 32767.0f;
+  else if (wheel == WHEEL_RL) minPwmRaw = (MOTOR_MIN_PWM_RL / 100.0f) * 32767.0f;
+  else if (wheel == WHEEL_RR) minPwmRaw = (MOTOR_MIN_PWM_RR / 100.0f) * 32767.0f;
+
+  // Compute feed-forward with deadband offset
+  float feedForward = 0.0f;
+  if (rpm > 0.0f) {
+    feedForward = minPwmRaw + (rpm / MAX_WHEEL_RPM) * (32767.0f - minPwmRaw);
+  } else if (rpm < 0.0f) {
+    feedForward = -minPwmRaw + (rpm / MAX_WHEEL_RPM) * (32767.0f - minPwmRaw);
+  }
+
   const float error = rpm - measured;
   _integral[wheel] = constrain(_integral[wheel] + (error * dtSec * KI), -INTEGRAL_LIMIT, INTEGRAL_LIMIT);
   return clampCommand(feedForward + (error * KP) + _integral[wheel]);

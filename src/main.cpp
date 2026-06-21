@@ -61,6 +61,7 @@ bool idleYawHoldEnabled = IDLE_YAW_HOLD_ENABLED_DEFAULT;
 bool yawCorrectionInverted = YAW_CORRECTION_INVERTED_DEFAULT;
 bool driveClosedLoopEnabled = DRIVE_CLOSED_LOOP_DEFAULT;
 bool fieldCentricEnabled = true;
+bool headingControlMode = true; // true = absolute pointer (default), false = rotation rate
 bool telemetryEnabled = false;
 bool lastManualTurn = false;
 bool lastCrossButton = false;
@@ -640,9 +641,19 @@ void processGamepad(ControllerPtr ctl) {
   {
     // Baca state tombol (false kalau tidak ada controller)
     const bool l1 = ctl && ctl->isConnected() ? (bool)ctl->l1() : false;
-    const bool l2 = ctl && ctl->isConnected() ? (bool)ctl->l2() : false;
     const bool r1 = ctl && ctl->isConnected() ? (bool)ctl->r1() : false;
-    const bool r2 = ctl && ctl->isConnected() ? (bool)ctl->r2() : false;
+
+    // Read analog trigger pressure (normally 0-1023 in Bluepad32)
+    float triggerL2 = 0.0f;
+    float triggerR2 = 0.0f;
+    if (ctl && ctl->isConnected()) {
+      triggerL2 = (float)ctl->l2() / 1023.0f;
+      if (triggerL2 > 1.0f) triggerL2 = 1.0f;
+      triggerR2 = (float)ctl->r2() / 1023.0f;
+      if (triggerR2 > 1.0f) triggerR2 = 1.0f;
+    }
+    const bool l2 = triggerL2 > 0.1f;
+    const bool r2 = triggerR2 > 0.1f;
 
     // Jika tidak ada stik terhubung (termasuk saat awal menyala), paksa claw tutup dan lifter naik
     if (ctl == nullptr || !ctl->isConnected()) {
@@ -670,9 +681,9 @@ void processGamepad(ControllerPtr ctl) {
                     gripperRear.isClawClosed() ? "CLOSE" : "OPEN");
     }
 
-    // Target awal berdasarkan tombol stik (UP = 1.0f, DOWN = 0.0f)
-    float targetFront = l2 ? 0.0f : 1.0f;
-    float targetRear  = r2 ? 0.0f : 1.0f;
+    // Target awal berdasarkan trigger stik (UP = 1.0f, DOWN = 0.0f)
+    float targetFront = ctl && ctl->isConnected() ? (1.0f - triggerL2) : 1.0f;
+    float targetRear  = ctl && ctl->isConnected() ? (1.0f - triggerR2) : 1.0f;
 
     // Membaca kemiringan (pitch & roll) dari MPU6050
     const ImuTelemetry imu = Imu().telemetry();
@@ -777,7 +788,10 @@ void processGamepad(ControllerPtr ctl) {
   const bool squareButton = ctl->x();
   const bool startButton = ctl->miscStart();
   if (squareButton && !lastSquareButton) {
-    toggleYawHoldFromGamepad();
+    headingControlMode = !headingControlMode;
+    yawTargetDeg = Imu().telemetry().yawDeg;
+    yawPid.reset();
+    Serial.printf("[System] Mode: %s\n", headingControlMode ? "HEADING LOCK (Pointer)" : "ROTATION RATE (Manual)");
   }
   if ((crossButton && !lastCrossButton) || (startButton && !lastStartButton)) {
     zeroYawTarget();
@@ -789,7 +803,16 @@ void processGamepad(ControllerPtr ctl) {
   ImuTelemetry imu = Imu().telemetry();
   float moveX = axisToPercent(ctl->axisX());
   float moveY = axisToPercent(ctl->axisY());
-  float rotate = axisToPercent(ctl->axisRX());
+
+  // Right stick absolute heading calculation (pointing: UP = 0 deg, RIGHT = 90 deg, DOWN = 180 deg, LEFT = -90 deg)
+  float rx = ctl->axisRX();
+  float ry = -ctl->axisRY(); // Negated so up is positive Y
+  float mag = sqrtf(rx*rx + ry*ry);
+  if (headingControlMode && mag > 200.0f) {
+    yawTargetDeg = atan2f(rx, ry) * RAD_TO_DEG;
+  }
+
+  float rotate = headingControlMode ? 0.0f : axisToPercent(ctl->axisRX());
 
   applyDpadOverride(ctl, moveX, moveY);
 

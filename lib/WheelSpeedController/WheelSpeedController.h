@@ -30,6 +30,7 @@ private:
   EncoderHub *_encoders = nullptr;
   uint32_t _lastUpdateUs = 0;
   float _targetRpm[WHEEL_COUNT] = {0, 0, 0, 0};
+  float _currentTargetRpm[WHEEL_COUNT] = {0, 0, 0, 0};
   float _measuredRpm[WHEEL_COUNT] = {0, 0, 0, 0};
   float _integral[WHEEL_COUNT] = {0, 0, 0, 0};
   int16_t _command[WHEEL_COUNT] = {0, 0, 0, 0};
