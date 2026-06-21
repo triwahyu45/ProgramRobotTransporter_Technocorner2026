@@ -161,20 +161,7 @@ int16_t WheelSpeedController::computeCommand(uint8_t wheel, float rpm, float mea
     return 0;
   }
 
-  // Get wheel-specific deadband raw PWM offset
-  float minPwmRaw = 0.0f;
-  if (wheel == WHEEL_FL) minPwmRaw = (MOTOR_MIN_PWM_FL / 100.0f) * 32767.0f;
-  else if (wheel == WHEEL_FR) minPwmRaw = (MOTOR_MIN_PWM_FR / 100.0f) * 32767.0f;
-  else if (wheel == WHEEL_RL) minPwmRaw = (MOTOR_MIN_PWM_RL / 100.0f) * 32767.0f;
-  else if (wheel == WHEEL_RR) minPwmRaw = (MOTOR_MIN_PWM_RR / 100.0f) * 32767.0f;
-
-  // Compute feed-forward with deadband offset
-  float feedForward = 0.0f;
-  if (rpm > 0.0f) {
-    feedForward = minPwmRaw + (rpm / MAX_WHEEL_RPM) * (32767.0f - minPwmRaw);
-  } else if (rpm < 0.0f) {
-    feedForward = -minPwmRaw + (rpm / MAX_WHEEL_RPM) * (32767.0f - minPwmRaw);
-  }
+  const float feedForward = (rpm / MAX_WHEEL_RPM) * 32767.0f;
 
   const float error = rpm - measured;
   _integral[wheel] = constrain(_integral[wheel] + (error * dtSec * KI), -INTEGRAL_LIMIT, INTEGRAL_LIMIT);

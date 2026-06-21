@@ -647,9 +647,9 @@ void processGamepad(ControllerPtr ctl) {
     float triggerL2 = 0.0f;
     float triggerR2 = 0.0f;
     if (ctl && ctl->isConnected()) {
-      triggerL2 = (float)ctl->l2() / 1023.0f;
+      triggerL2 = (float)ctl->brake() / 1023.0f;
       if (triggerL2 > 1.0f) triggerL2 = 1.0f;
-      triggerR2 = (float)ctl->r2() / 1023.0f;
+      triggerR2 = (float)ctl->throttle() / 1023.0f;
       if (triggerR2 > 1.0f) triggerR2 = 1.0f;
     }
     const bool l2 = triggerL2 > 0.1f;
