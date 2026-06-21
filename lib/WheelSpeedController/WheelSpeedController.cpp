@@ -33,6 +33,9 @@ void WheelSpeedController::begin(PcaMotorDriver &driver, EncoderHub &encoders) {
 }
 
 void WheelSpeedController::setEnabled(bool enabled) {
+  if (_enabled == enabled) {
+    return;
+  }
   _enabled = enabled;
   if (enabled) {
     _lastUpdateUs = micros();
