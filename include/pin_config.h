@@ -52,17 +52,19 @@
 // Setelah gearbox swap 2026-06-24:
 //   Roda depan (gearbox baru, torsi lebih tinggi) → perlu PWM lebih besar untuk mulai
 //   Roda belakang (gearbox lama) → sama seperti sebelumnya
-#define MOTOR_MIN_PWM_FL        10.0f   // percent, 0-100
-#define MOTOR_MIN_PWM_FR        10.0f
+#define MOTOR_MIN_PWM_FL        15.0f   // percent — gearbox baru, static friction lebih tinggi
+#define MOTOR_MIN_PWM_FR        15.0f
 #define MOTOR_MIN_PWM_RL        20.0f
 #define MOTOR_MIN_PWM_RR        20.0f
 
-// Max RPM hasil ramp test (commit 3c51abc). FL/FR gearbox baru — nilai ini perlu ramp test ulang
-// tapi untuk sementara pakai nilai lama RL/RR dan estimasi FL/FR dari rasio PPR.
-#define MOTOR_MAX_RPM_FL        119.0f  // estimasi (gearbox baru, PPR=408 vs 193 → ~55% lebih lambat)
-#define MOTOR_MAX_RPM_FR        122.0f  // estimasi
-#define MOTOR_MAX_RPM_RL        108.0f  // dikalibrasi
-#define MOTOR_MAX_RPM_RR        110.0f  // dikalibrasi
+// PENTING: FL/FR pakai gearbox BARU (PPR 408 vs 193 untuk RL/RR).
+// Rasio PPR: 408/193 = 2.11x → FL/FR max RPM = RL max / 2.11 = 108/2.11 ≈ 51 RPM.
+// Feed-forward HARUS pakai nilai ini, bukan nilai lama (119/122)!
+// Kalau nilai ini salah → feed-forward kirim PWM berlebih → PID oscillate → patah-patah!
+#define MOTOR_MAX_RPM_FL        55.0f   // FL gearbox baru: 108/2.11 ≈ 51 RPM (pakai 55 sbg margin)
+#define MOTOR_MAX_RPM_FR        55.0f   // FR gearbox baru: sama dengan FL
+#define MOTOR_MAX_RPM_RL        108.0f  // RL gearbox lama, sudah dikalibrasi ramp test
+#define MOTOR_MAX_RPM_RR        110.0f  // RR gearbox lama, sudah dikalibrasi ramp test
 
 // Flip these if Encoder_Test shows the sign is backward.
 #define ENC_FL_INVERTED     true

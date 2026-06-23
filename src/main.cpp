@@ -22,10 +22,10 @@ constexpr uint32_t TELEMETRY_PERIOD_MS = 500;
 constexpr uint32_t SERIAL_LINE_TIMEOUT_MS = 80;
 constexpr int STICK_DEADZONE = 60;
 constexpr int STICK_MAX = 512;
-constexpr float DPAD_MOVE_PERCENT = 50.0f;           // D-pad speed
-constexpr float MAX_DRIVE_PERCENT = 60.0f;           // Max stick speed (Triangle=full, Circle=setengah)
-constexpr float MAX_TURN_PERCENT = 35.0f;            // Max rotasi manual (stick kanan)
-constexpr float MAX_YAW_CORRECTION_PERCENT = 20.0f; // Max koreksi angle lock (yaw PID)
+constexpr float DPAD_MOVE_PERCENT = 40.0f;           // D-pad speed
+constexpr float MAX_DRIVE_PERCENT = 40.0f;           // 40% × 80 RPM = 32 RPM target, FL mampu (max 55)
+constexpr float MAX_TURN_PERCENT = 25.0f;            // Max rotasi manual
+constexpr float MAX_YAW_CORRECTION_PERCENT = 15.0f; // Max koreksi angle lock (yaw PID)
 constexpr bool IDLE_YAW_HOLD_ENABLED_DEFAULT = true;
 constexpr float YAW_HOLD_DEADBAND_DEG = 2.0f;
 constexpr float IDLE_YAW_MAX_TURN_PERCENT = 18.0f;
