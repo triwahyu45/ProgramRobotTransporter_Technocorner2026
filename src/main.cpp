@@ -22,10 +22,10 @@ constexpr uint32_t TELEMETRY_PERIOD_MS = 500;
 constexpr uint32_t SERIAL_LINE_TIMEOUT_MS = 80;
 constexpr int STICK_DEADZONE = 60;
 constexpr int STICK_MAX = 512;
-constexpr float DPAD_MOVE_PERCENT = 28.0f;   // D-pad speed
-constexpr float MAX_DRIVE_PERCENT = 25.0f;    // Max stick speed
-constexpr float MAX_TURN_PERCENT = 20.0f;     // Max rotasi manual (stick kanan)
-constexpr float MAX_YAW_CORRECTION_PERCENT = 15.0f; // Max koreksi angle lock (yaw PID)
+constexpr float DPAD_MOVE_PERCENT = 50.0f;           // D-pad speed
+constexpr float MAX_DRIVE_PERCENT = 60.0f;           // Max stick speed (Triangle=full, Circle=setengah)
+constexpr float MAX_TURN_PERCENT = 35.0f;            // Max rotasi manual (stick kanan)
+constexpr float MAX_YAW_CORRECTION_PERCENT = 20.0f; // Max koreksi angle lock (yaw PID)
 constexpr bool IDLE_YAW_HOLD_ENABLED_DEFAULT = true;
 constexpr float YAW_HOLD_DEADBAND_DEG = 2.0f;
 constexpr float IDLE_YAW_MAX_TURN_PERCENT = 18.0f;
@@ -35,8 +35,8 @@ constexpr bool INVERT_ROTATE = false;
 constexpr bool YAW_CORRECTION_INVERTED_DEFAULT = true;
 // DRIVE_CLOSED_LOOP_DEFAULT = false karena encoder RR (GPIO36/39) noise 2500+ RPM
 // dan encoder RL (GPIO34/35) tidak terdeteksi. Open-loop jauh lebih smooth untuk kompetisi.
-// Aktifkan closed-loop manual via serial 'drive closed' setelah hardware encoder fix.
-constexpr bool DRIVE_CLOSED_LOOP_DEFAULT = false;
+// Closed-loop aktif by default. Encoder sudah dikonfirmasi ada pull-up oleh user.
+constexpr bool DRIVE_CLOSED_LOOP_DEFAULT = true;
 constexpr bool RESET_BLUETOOTH_PAIRING_ON_BOOT = false;
 
 struct YawPid {
@@ -59,7 +59,7 @@ uint32_t lastSerialByteMs = 0;
 uint32_t lastTelemetryMs = 0;
 YawPid yawPid;
 float yawTargetDeg = 0.0f;
-float speedMultiplier = 1.0f;
+float speedMultiplier = 1.0f; // Default full — Triangle=100%, Circle=50%
 bool yawHoldEnabled = true;
 bool idleYawHoldEnabled = IDLE_YAW_HOLD_ENABLED_DEFAULT;
 bool yawCorrectionInverted = YAW_CORRECTION_INVERTED_DEFAULT;
@@ -586,10 +586,13 @@ void driveRobot(float x, float y, float turn) {
 }
 
 void updateSpeedButtons(ControllerPtr ctl) {
-  if (ctl->b()) {
-    speedMultiplier = 0.40f;
-  } else if (ctl->y()) {
-    speedMultiplier = 0.75f;
+  // △ Triangle (y) = full speed (default 100% dari MAX_DRIVE_PERCENT)
+  // ○ Circle (b)   = setengah kecepatan (50% dari MAX_DRIVE_PERCENT)
+  // Tidak tekan apapun → tetap di nilai sebelumnya (default 1.0 saat boot)
+  if (ctl->y() && !ctl->x()) {        // Triangle (tanpa Square)
+    speedMultiplier = 1.0f;
+  } else if (ctl->b()) {            // Circle
+    speedMultiplier = 0.5f;
   }
 }
 
@@ -844,16 +847,16 @@ void processGamepad(ControllerPtr ctl) {
     const bool wr2p = wr2 > 0.1f;
 
     if (triHeld && (wl1 || wr1 || wl2p || wr2p)) {
-      // Mode test aktif — override semua gerakan
+      // Mode test aktif — override semua gerakan, speed SANGAT PELAN
       wheelTestActive = true;
-      constexpr int16_t TEST_CMD = 8192;  // ~25% dari 32767
+      constexpr int16_t TEST_CMD = 1200;  // ~3.7% dari 32767 — super pelan, aman
       int16_t fl = wl1  ? TEST_CMD : 0;
       int16_t fr = wr1  ? TEST_CMD : 0;
       int16_t rl = wl2p ? TEST_CMD : 0;
       int16_t rr = wr2p ? TEST_CMD : 0;
       SpeedController().setEnabled(false);
       DriveAll(fl, fr, rl, rr);
-      Serial.printf("[WheelTest] FL=%d FR=%d RL=%d RR=%d\n", fl, fr, rl, rr);
+      Serial.printf("[WheelTest] FL=%d FR=%d RL=%d RR=%d (pelan 3.7%%)\n", fl, fr, rl, rr);
       return;  // jangan proses gerakan normal
     } else if (wheelTestActive) {
       // Baru keluar dari mode test — stop dan re-enable PID
@@ -870,13 +873,28 @@ void processGamepad(ControllerPtr ctl) {
   const bool crossButton = ctl->a();
   const bool squareButton = ctl->x();
   const bool startButton = ctl->miscStart();
-  if (squareButton && !lastSquareButton) {
+  const bool shareButton = ctl->miscSelect();
+
+  // Share + Square = toggle mode manual (tanpa IMU)
+  // Berguna kalau IMU mati / glitch saat kompetisi
+  if (shareButton && squareButton && !lastSquareButton) {
+    bool manualMode = yawHoldEnabled || fieldCentricEnabled;
+    yawHoldEnabled = !manualMode;
+    idleYawHoldEnabled = !manualMode;
+    fieldCentricEnabled = !manualMode;
+    yawPid.reset();
+    Serial.printf("[System] Mode: %s (Share+Square)\n",
+      (!manualMode) ? "NORMAL (IMU aktif)" : "MANUAL (IMU off, no field-centric)");
+  }
+  // Square saja = toggle mode heading lock / rotasi manual
+  else if (squareButton && !lastSquareButton && !shareButton) {
     headingControlMode = !headingControlMode;
     yawTargetDeg = Imu().telemetry().yawDeg;
     yawPid.reset();
-    Serial.printf("[System] Mode: %s\n", headingControlMode ? "HEADING LOCK (Pointer)" : "ROTATION RATE (Manual)");
+    Serial.printf("[System] Mode: %s\n",
+      headingControlMode ? "HEADING LOCK (analog kanan = arah)" : "ROTATION RATE (analog kanan = rotasi)");
   }
-  if ((crossButton && !lastCrossButton) || (startButton && !lastStartButton)) {
+  if ((crossButton && !lastCrossButton) || (startButton && !lastStartButton && !shareButton)) {
     zeroYawTarget();
   }
   lastCrossButton = crossButton;

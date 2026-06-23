@@ -62,14 +62,11 @@ void EncoderHub::begin() {
   attachInterrupt(digitalPinToInterrupt(PIN_ENC1B), isrFL, CHANGE);
   attachInterrupt(digitalPinToInterrupt(PIN_ENC2A), isrFR, CHANGE);
   attachInterrupt(digitalPinToInterrupt(PIN_ENC2B), isrFR, CHANGE);
-  // GPIO 34/35 (RL) dan 36/39 (RR) adalah input-only pins tanpa pull-up internal.
-  // Tanpa pull-up eksternal, pin ini menghasilkan noise ribuan interrupt/detik
-  // yang overload CPU dan merusak closed-loop PID.
-  // DISABLED: attachInterrupt untuk RL dan RR sampai hardware fix (tambah pull-up 10k).
-  // attachInterrupt(digitalPinToInterrupt(PIN_ENC3A), isrRL, CHANGE);
-  // attachInterrupt(digitalPinToInterrupt(PIN_ENC3B), isrRL, CHANGE);
-  // attachInterrupt(digitalPinToInterrupt(PIN_ENC4A), isrRR, CHANGE);
-  // attachInterrupt(digitalPinToInterrupt(PIN_ENC4B), isrRR, CHANGE);
+  // GPIO 34/35 (RL) dan 36/39 (RR) — user konfirmasi ada pull-up eksternal. Aktifkan.
+  attachInterrupt(digitalPinToInterrupt(PIN_ENC3A), isrRL, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(PIN_ENC3B), isrRL, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(PIN_ENC4A), isrRR, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(PIN_ENC4B), isrRR, CHANGE);
 }
 
 void EncoderHub::reset() {

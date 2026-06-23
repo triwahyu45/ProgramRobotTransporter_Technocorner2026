@@ -5,8 +5,8 @@
 
 namespace {
 constexpr uint32_t CONTROL_PERIOD_US = 20000;  // 50 Hz control loop
-constexpr float KP = 55.0f;    // Turun dari 120 → lebih smooth, kurang agresif
-constexpr float KI = 12.0f;    // Turun dari 40 → integrator lebih pelan, kurang buzz
+constexpr float KP = 25.0f;    // Turun dari 55 → lebih smooth, tidak oscillate
+constexpr float KI = 6.0f;     // Turun dari 12 → integrator lebih pelan
 constexpr float INTEGRAL_LIMIT = 8000.0f;
 constexpr float RPM_FAULT_LIMIT = MAX_WHEEL_RPM * 2.0f;
 constexpr float RPM_DEADBAND = 1.5f;  // Naik sedikit agar tidak buzz di sekitar nol

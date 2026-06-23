@@ -52,18 +52,17 @@
 // Setelah gearbox swap 2026-06-24:
 //   Roda depan (gearbox baru, torsi lebih tinggi) → perlu PWM lebih besar untuk mulai
 //   Roda belakang (gearbox lama) → sama seperti sebelumnya
-#define MOTOR_MIN_PWM_FL        18.0f   // percent, 0-100
-#define MOTOR_MIN_PWM_FR        18.0f
+#define MOTOR_MIN_PWM_FL        10.0f   // percent, 0-100
+#define MOTOR_MIN_PWM_FR        10.0f
 #define MOTOR_MIN_PWM_RL        20.0f
 #define MOTOR_MIN_PWM_RR        20.0f
 
-// Max measured RPM at 100% PWM (physical ramp test, no load).
-// Roda depan (gearbox baru) lebih lambat dari belakang — perlu ramp test ulang.
-// Estimasi sementara berdasarkan rasio gearbox (408/193 ≈ 2.1x lebih lambat dari roda belakang).
-#define MOTOR_MAX_RPM_FL        55.0f   // estimasi setelah gearbox baru (PERLU RAMP TEST)
-#define MOTOR_MAX_RPM_FR        55.0f   // estimasi setelah gearbox baru (PERLU RAMP TEST)
-#define MOTOR_MAX_RPM_RL        108.0f
-#define MOTOR_MAX_RPM_RR        110.0f
+// Max RPM hasil ramp test (commit 3c51abc). FL/FR gearbox baru — nilai ini perlu ramp test ulang
+// tapi untuk sementara pakai nilai lama RL/RR dan estimasi FL/FR dari rasio PPR.
+#define MOTOR_MAX_RPM_FL        119.0f  // estimasi (gearbox baru, PPR=408 vs 193 → ~55% lebih lambat)
+#define MOTOR_MAX_RPM_FR        122.0f  // estimasi
+#define MOTOR_MAX_RPM_RL        108.0f  // dikalibrasi
+#define MOTOR_MAX_RPM_RR        110.0f  // dikalibrasi
 
 // Flip these if Encoder_Test shows the sign is backward.
 #define ENC_FL_INVERTED     true
