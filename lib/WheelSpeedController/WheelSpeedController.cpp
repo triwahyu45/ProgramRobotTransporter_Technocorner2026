@@ -5,12 +5,19 @@
 
 namespace {
 constexpr uint32_t CONTROL_PERIOD_US = 20000;  // 50 Hz control loop
-constexpr float KP = 25.0f;    // Turun dari 55 → lebih smooth, tidak oscillate
-constexpr float KI = 6.0f;     // Turun dari 12 → integrator lebih pelan
-constexpr float INTEGRAL_LIMIT = 8000.0f;
-constexpr float RPM_FAULT_LIMIT = MAX_WHEEL_RPM * 2.0f;
-constexpr float RPM_DEADBAND = 1.5f;  // Naik sedikit agar tidak buzz di sekitar nol
+constexpr float KP = 25.0f;    // Lower than original → less aggressive with accurate feedforward
+constexpr float KI = 6.0f;     // Lower → slow integrator, avoid windup
+constexpr float INTEGRAL_LIMIT = 6000.0f;
+// RPM_FAULT_LIMIT: cukup tinggi agar noise EMI pada RL/RR (GPIO 34-39) tidak false-fault.
+// RL max RPM=108, RR max RPM=110. Noise bisa mencapai 200-400 RPM palsu.
+// FL/FR max=55, noise jauh lebih kecil karena GPIO 16/17/25/26 ada pull-up internal.
+constexpr float RPM_FAULT_LIMIT = 450.0f;  // Tinggi agar tidak false-fault dari EMI
+constexpr float RPM_DEADBAND = 1.5f;  // Sedikit lebih tinggi dari original agar tidak buzz
 constexpr int16_t MAX_COMMAND = 32767;
+// Re-enable semua encoder untuk ramp test / kalibrasi.
+// Jika setelah test terbukti RL/RR noise, ubah ke false untuk kompetisi.
+constexpr bool ENCODER_RL_ENABLED = true;   // test dulu: GPIO 34/35, bisa ada external pull-up
+constexpr bool ENCODER_RR_ENABLED = true;   // test dulu: GPIO 36/39
 
 WheelSpeedController speedController;
 
@@ -121,10 +128,23 @@ void WheelSpeedController::update(uint32_t nowUs) {
   const float maxChange = MAX_ACCEL_RPM_PER_SEC * dtSec;
 
   for (uint8_t wheel = 0; wheel < WHEEL_COUNT; ++wheel) {
+    // ─── Cek apakah encoder wheel ini reliable ───────────────────────────────
+    // RL (wheel=2) dan RR (wheel=3) pakai GPIO tanpa pull-up yang baik.
+    // Interrupt-nya dimatikan di EncoderReader sehingga rpm selalu = 0.
+    // Untuk roda ini, gunakan feedforward-only (tidak ada PID correction).
+    const bool hasEncoder = (wheel == WHEEL_RL) ? ENCODER_RL_ENABLED
+                          : (wheel == WHEEL_RR) ? ENCODER_RR_ENABLED
+                          : true;  // FL dan FR selalu ada encoder
+
     const EncoderSample sample = _encoders->sample(wheel, elapsedUs);
     _measuredRpm[wheel] = sample.rpm;
 
-    _fault[wheel] = abs(_measuredRpm[wheel]) > RPM_FAULT_LIMIT;
+    // Fault check hanya untuk roda dengan encoder aktif
+    if (hasEncoder) {
+      _fault[wheel] = abs(_measuredRpm[wheel]) > RPM_FAULT_LIMIT;
+    } else {
+      _fault[wheel] = false;  // Tidak ada encoder → tidak bisa fault
+    }
     if (_fault[wheel]) {
       _command[wheel] = 0;
       _integral[wheel] = 0.0f;
@@ -142,7 +162,7 @@ void WheelSpeedController::update(uint32_t nowUs) {
       _currentTargetRpm[wheel] = _targetRpm[wheel];
     }
 
-    _command[wheel] = computeCommand(wheel, _currentTargetRpm[wheel], _measuredRpm[wheel], dtSec);
+    _command[wheel] = computeCommand(wheel, _currentTargetRpm[wheel], _measuredRpm[wheel], dtSec, hasEncoder);
   }
 
   writeCommands();
@@ -155,14 +175,13 @@ WheelTelemetry WheelSpeedController::telemetry(uint8_t wheel) const {
   return {_targetRpm[wheel], _measuredRpm[wheel], _command[wheel], _fault[wheel]};
 }
 
-int16_t WheelSpeedController::computeCommand(uint8_t wheel, float rpm, float measured, float dtSec) {
+int16_t WheelSpeedController::computeCommand(uint8_t wheel, float rpm, float measured, float dtSec, bool hasEncoder) {
   if (abs(rpm) < RPM_DEADBAND) {
     _integral[wheel] = 0.0f;
     return 0;
   }
 
   // Per-wheel max RPM untuk feed-forward yang akurat
-  // Roda depan (gearbox baru) punya max RPM lebih rendah dari belakang
   float maxRpmForWheel = MAX_WHEEL_RPM;
   if (wheel == WHEEL_FL) maxRpmForWheel = MOTOR_MAX_RPM_FL;
   else if (wheel == WHEEL_FR) maxRpmForWheel = MOTOR_MAX_RPM_FR;
@@ -176,13 +195,13 @@ int16_t WheelSpeedController::computeCommand(uint8_t wheel, float rpm, float mea
   else if (wheel == WHEEL_RL) minPwmRaw = (MOTOR_MIN_PWM_RL / 100.0f) * 32767.0f;
   else if (wheel == WHEEL_RR) minPwmRaw = (MOTOR_MIN_PWM_RR / 100.0f) * 32767.0f;
 
-  // Scale deadband untuk RPM kecil agar tidak buzz/jitter di sekitar nol
+  // Scale deadband untuk RPM kecil
   constexpr float RPM_START_THRESHOLD = 6.0f;
   float scale = abs(rpm) / RPM_START_THRESHOLD;
   if (scale > 1.0f) scale = 1.0f;
   float effectiveMinPwm = minPwmRaw * scale;
 
-  // Feed-forward berdasarkan per-wheel max RPM
+  // Feed-forward berdasarkan per-wheel max RPM (akurat, dikalibrasi per roda)
   float feedForward = 0.0f;
   if (rpm > 0.0f) {
     feedForward = effectiveMinPwm + (rpm / maxRpmForWheel) * (32767.0f - effectiveMinPwm);
@@ -190,6 +209,14 @@ int16_t WheelSpeedController::computeCommand(uint8_t wheel, float rpm, float mea
     feedForward = -effectiveMinPwm + (rpm / maxRpmForWheel) * (32767.0f - effectiveMinPwm);
   }
 
+  // Jika tidak ada encoder (RL/RR GPIO noise), gunakan feedforward ONLY.
+  // Tidak ada PID correction, tidak ada integrator → aman, tidak runaway.
+  if (!hasEncoder) {
+    _integral[wheel] = 0.0f;
+    return clampCommand(feedForward);
+  }
+
+  // Closed-loop PID untuk FL dan FR (encoder reliable, GPIO 16/17/25/26)
   const float error = rpm - measured;
   _integral[wheel] = constrain(_integral[wheel] + (error * dtSec * KI), -INTEGRAL_LIMIT, INTEGRAL_LIMIT);
   return clampCommand(feedForward + (error * KP) + _integral[wheel]);

@@ -37,7 +37,7 @@ private:
   bool _fault[WHEEL_COUNT] = {false, false, false, false};
   bool _enabled = true;
 
-  int16_t computeCommand(uint8_t wheel, float rpm, float measured, float dtSec);
+  int16_t computeCommand(uint8_t wheel, float rpm, float measured, float dtSec, bool hasEncoder = true);
   void writeCommands();
 };
 

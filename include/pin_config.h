@@ -66,21 +66,28 @@
 #define MOTOR_MAX_RPM_RL        108.0f  // RL gearbox lama, sudah dikalibrasi ramp test
 #define MOTOR_MAX_RPM_RR        110.0f  // RR gearbox lama, sudah dikalibrasi ramp test
 
-// Encoder inversion harus MATCH dengan motor inversion!
-// MOTOR_INVERTED xor ENC_INVERTED menentukan apakah feedback positif/negatif:
-//   Jika MOTOR_INVERTED=true  → ENC_INVERTED harus false (biar sign RPM benar)
-//   Jika MOTOR_INVERTED=false → ENC_INVERTED sesuai orientasi encoder fisik
-#define ENC_FL_INVERTED     false   // MOTOR_FL_INVERTED=true → flip encoder supaya sign benar
-#define ENC_FR_INVERTED     true    // MOTOR_FR_INVERTED=false → orientasi encoder asli
-#define ENC_RL_INVERTED     true    // MOTOR_RL_INVERTED=false → orientasi encoder asli
-#define ENC_RR_INVERTED     false   // MOTOR_RR_INVERTED=true → flip encoder supaya sign benar
+// !! PERHATIAN - ENCODER GPIO LIMITATIONS:
+// FL (GPIO 16/17) dan FR (GPIO 25/26): punya internal pull-up → RELIABLE
+// RL (GPIO 34/35): input-only, bisa external pull-up tapi SERING noise EMI dari motor
+// RR (GPIO 36/39): input-only, TIDAK BISA pull-up apapun → paling tidak reliable
+//
+// Rule: ENC_INVERTED HARUS kebalikan dari MOTOR_INVERTED!
+//   MOTOR_INVERTED=true  + ENC_INVERTED=false → feedback positif ✓
+//   MOTOR_INVERTED=false + ENC_INVERTED=true  → feedback positif ✓
+//   Kalau sama-sama true/false → NEGATIF FEEDBACK → PID RUNAWAY!
+#define ENC_FL_INVERTED     false   // FL: MOTOR_INVERTED=true → ENC harus false
+#define ENC_FR_INVERTED     false   // FR: MOTOR_INVERTED=true → ENC harus false (gearbox baru!)
+#define ENC_RL_INVERTED     true    // RL: MOTOR_INVERTED=false → ENC orientasi asli
+#define ENC_RR_INVERTED     false   // RR: MOTOR_INVERTED=true → ENC harus false
 
-// Flip these if positive RPM drives a wheel backward.
-// 2026-06-24: FL dan RR kebalik setelah gearbox swap → di-invert
-#define MOTOR_FL_INVERTED   true    // kebalik — difix
-#define MOTOR_FR_INVERTED   false
-#define MOTOR_RL_INVERTED   false
-#define MOTOR_RR_INVERTED   true    // kebalik — difix
+// Flip motor jika positive command bikin roda mundur.
+// FL dan FR: gearbox baru → arah terbalik → di-invert
+// RR: arah terbalik (mounting/wiring) → di-invert
+// RL: arah benar → tidak di-invert
+#define MOTOR_FL_INVERTED   true    // gearbox baru, arah terbalik
+#define MOTOR_FR_INVERTED   true    // gearbox baru (PPR=408), arah terbalik!
+#define MOTOR_RL_INVERTED   false   // gearbox lama, arah benar
+#define MOTOR_RR_INVERTED   true    // arah terbalik (mounting)
 
 // ─── Servo GPIO (langsung dari ESP32, bukan PCA9685) ──────────────────────────
 // Sesuai skematik hardware:
