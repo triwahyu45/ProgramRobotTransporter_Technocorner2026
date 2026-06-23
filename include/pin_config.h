@@ -52,8 +52,8 @@
 // Setelah gearbox swap 2026-06-24:
 //   Roda depan (gearbox baru, torsi lebih tinggi) → perlu PWM lebih besar untuk mulai
 //   Roda belakang (gearbox lama) → sama seperti sebelumnya
-#define MOTOR_MIN_PWM_FL        15.0f   // percent — gearbox baru, static friction lebih tinggi
-#define MOTOR_MIN_PWM_FR        15.0f
+#define MOTOR_MIN_PWM_FL        18.0f   // terukur dari ramp sweep 2026-06-24 (ZK-5AD fix)
+#define MOTOR_MIN_PWM_FR        26.0f   // FR gearbox friction lebih tinggi, deadband lebih besar
 #define MOTOR_MIN_PWM_RL        20.0f
 #define MOTOR_MIN_PWM_RR        20.0f
 
