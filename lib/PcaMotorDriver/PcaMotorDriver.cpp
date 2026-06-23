@@ -55,15 +55,17 @@ void PcaTb6612Motor::drive(int16_t value) {
   const bool forward = _pins.inverted ? !forwardCommand : forwardCommand;
   const uint16_t duty = scaleCommandToDuty(value);
 
+  // ZK-5AD (TA6586): tidak ada pin ENA/ENB terpisah.
+  // Speed dikontrol dengan mengirim PWM langsung ke IN1 (forward)
+  // atau IN2 (backward). Pin PWM (channel ke-3) tidak digunakan.
   if (forward) {
-    channelOn(_pins.in1);
-    channelOff(_pins.in2);
+    channelDuty(_pins.in1, duty);  // IN1 = PWM duty (speed)
+    channelOff(_pins.in2);          // IN2 = LOW
   } else {
-    channelOff(_pins.in1);
-    channelOn(_pins.in2);
+    channelOff(_pins.in1);          // IN1 = LOW
+    channelDuty(_pins.in2, duty);  // IN2 = PWM duty (speed)
   }
-
-  channelDuty(_pins.pwm, duty);
+  channelOff(_pins.pwm);  // Tidak dipakai ZK-5AD
 }
 
 void PcaTb6612Motor::brake() {
@@ -71,10 +73,10 @@ void PcaTb6612Motor::brake() {
     return;
   }
 
-  // TB6612FNG short brake: IN1=HIGH, IN2=HIGH.
+  // ZK-5AD (TA6586) brake: IN1=HIGH, IN2=HIGH = short brake.
   channelOn(_pins.in1);
   channelOn(_pins.in2);
-  channelDuty(_pins.pwm, PCA_MAX_DUTY);
+  channelOff(_pins.pwm);  // Tidak dipakai ZK-5AD
 }
 
 void PcaTb6612Motor::coast() {
