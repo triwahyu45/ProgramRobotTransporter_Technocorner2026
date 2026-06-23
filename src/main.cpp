@@ -33,10 +33,12 @@ constexpr bool INVERT_MOVE_X = false;
 constexpr bool INVERT_MOVE_Y = true;
 constexpr bool INVERT_ROTATE = false;
 constexpr bool YAW_CORRECTION_INVERTED_DEFAULT = true;
-// DRIVE_CLOSED_LOOP_DEFAULT = false karena encoder RR (GPIO36/39) noise 2500+ RPM
-// dan encoder RL (GPIO34/35) tidak terdeteksi. Open-loop jauh lebih smooth untuk kompetisi.
-// Closed-loop aktif by default. Encoder sudah dikonfirmasi ada pull-up oleh user.
-constexpr bool DRIVE_CLOSED_LOOP_DEFAULT = true;
+// DRIVE_CLOSED_LOOP_DEFAULT = false: Encoder FL/FR terkena EMI dari motor
+// sehingga measured RPM jauh di atas nilai sebenarnya (5 RPM target -> baca 85 RPM).
+// PID lalu 'mengoreksi' nilai palsu -> command drop -> motor berhenti -> patah-patah.
+// Open-loop jauh lebih smooth. Setelah pasang RC filter hardware (100ohm+100nF),
+// bisa coba closed-loop lagi.
+constexpr bool DRIVE_CLOSED_LOOP_DEFAULT = false;
 constexpr bool RESET_BLUETOOTH_PAIRING_ON_BOOT = false;
 
 struct YawPid {
