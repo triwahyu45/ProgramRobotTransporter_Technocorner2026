@@ -4,12 +4,20 @@
 #include <Preferences.h>
 
 namespace {
+// inputPullup field:
+// true  = INPUT_PULLUP (ESP32 internal 45kOhm pull-up to 3.3V)
+// false = INPUT (no pull-up, needed for GPIO 34/35/36/39 which cannot pull-up)
+//
+// FL GPIO 16/17, FR GPIO 25/26: SUPPORT pull-up → aktifkan!
+// Encoder open-collector butuh pull-up untuk bisa menghasilkan HIGH level.
+// RL GPIO 34/35, RR GPIO 36/39: input-only, TIDAK bisa pull-up.
 constexpr EncoderPins ENCODER_PINS[WHEEL_COUNT] = {
-    {PIN_ENC1A, PIN_ENC1B, ENC_FL_INVERTED, false},
-    {PIN_ENC2A, PIN_ENC2B, ENC_FR_INVERTED, false},
-    {PIN_ENC3A, PIN_ENC3B, ENC_RL_INVERTED, false},
-    {PIN_ENC4A, PIN_ENC4B, ENC_RR_INVERTED, false},
+    {PIN_ENC1A, PIN_ENC1B, ENC_FL_INVERTED, true},   // FL GPIO 16/17 → INPUT_PULLUP
+    {PIN_ENC2A, PIN_ENC2B, ENC_FR_INVERTED, true},   // FR GPIO 25/26 → INPUT_PULLUP
+    {PIN_ENC3A, PIN_ENC3B, ENC_RL_INVERTED, false},  // RL GPIO 34/35 → INPUT (no pullup)
+    {PIN_ENC4A, PIN_ENC4B, ENC_RR_INVERTED, false},  // RR GPIO 36/39 → INPUT (no pullup)
 };
+
 
 constexpr int8_t QUAD_TABLE[16] = {
     0, -1, 1, 0,
