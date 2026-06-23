@@ -72,10 +72,11 @@
 #define ENC_RR_INVERTED     true
 
 // Flip these if positive RPM drives a wheel backward.
-#define MOTOR_FL_INVERTED   false
+// 2026-06-24: FL dan RR kebalik setelah gearbox swap → di-invert
+#define MOTOR_FL_INVERTED   true    // kebalik — difix
 #define MOTOR_FR_INVERTED   false
 #define MOTOR_RL_INVERTED   false
-#define MOTOR_RR_INVERTED   false
+#define MOTOR_RR_INVERTED   true    // kebalik — difix
 
 // ─── Servo GPIO (langsung dari ESP32, bukan PCA9685) ──────────────────────────
 // Sesuai skematik hardware:
