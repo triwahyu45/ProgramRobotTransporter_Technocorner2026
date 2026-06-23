@@ -66,11 +66,14 @@
 #define MOTOR_MAX_RPM_RL        108.0f  // RL gearbox lama, sudah dikalibrasi ramp test
 #define MOTOR_MAX_RPM_RR        110.0f  // RR gearbox lama, sudah dikalibrasi ramp test
 
-// Flip these if Encoder_Test shows the sign is backward.
-#define ENC_FL_INVERTED     true
-#define ENC_FR_INVERTED     true
-#define ENC_RL_INVERTED     true
-#define ENC_RR_INVERTED     true
+// Encoder inversion harus MATCH dengan motor inversion!
+// MOTOR_INVERTED xor ENC_INVERTED menentukan apakah feedback positif/negatif:
+//   Jika MOTOR_INVERTED=true  → ENC_INVERTED harus false (biar sign RPM benar)
+//   Jika MOTOR_INVERTED=false → ENC_INVERTED sesuai orientasi encoder fisik
+#define ENC_FL_INVERTED     false   // MOTOR_FL_INVERTED=true → flip encoder supaya sign benar
+#define ENC_FR_INVERTED     true    // MOTOR_FR_INVERTED=false → orientasi encoder asli
+#define ENC_RL_INVERTED     true    // MOTOR_RL_INVERTED=false → orientasi encoder asli
+#define ENC_RR_INVERTED     false   // MOTOR_RR_INVERTED=true → flip encoder supaya sign benar
 
 // Flip these if positive RPM drives a wheel backward.
 // 2026-06-24: FL dan RR kebalik setelah gearbox swap → di-invert
