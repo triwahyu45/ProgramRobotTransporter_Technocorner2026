@@ -22,9 +22,10 @@ constexpr uint32_t TELEMETRY_PERIOD_MS = 500;
 constexpr uint32_t SERIAL_LINE_TIMEOUT_MS = 80;
 constexpr int STICK_DEADZONE = 60;
 constexpr int STICK_MAX = 512;
-constexpr float DPAD_MOVE_PERCENT = 45.0f;   // D-pad speed
-constexpr float MAX_DRIVE_PERCENT = 40.0f;    // Max stick speed (cukup untuk kompetisi, tidak terlalu kencang)
-constexpr float MAX_TURN_PERCENT = 30.0f;     // Max rotasi
+constexpr float DPAD_MOVE_PERCENT = 28.0f;   // D-pad speed
+constexpr float MAX_DRIVE_PERCENT = 25.0f;    // Max stick speed
+constexpr float MAX_TURN_PERCENT = 20.0f;     // Max rotasi manual (stick kanan)
+constexpr float MAX_YAW_CORRECTION_PERCENT = 15.0f; // Max koreksi angle lock (yaw PID)
 constexpr bool IDLE_YAW_HOLD_ENABLED_DEFAULT = true;
 constexpr float YAW_HOLD_DEADBAND_DEG = 2.0f;
 constexpr float IDLE_YAW_MAX_TURN_PERCENT = 18.0f;
@@ -933,7 +934,11 @@ void processGamepad(ControllerPtr ctl) {
       yawPid.reset();
       lastManualTurn = false;
     }
-    turnCommand = yawPidUpdate(yawTargetDeg, imu.yawDeg, imu.gyroZ) * speedMultiplier;
+    // Clamp yaw PID output agar tidak spin terlalu kencang saat angle lock
+    turnCommand = constrain(
+      yawPidUpdate(yawTargetDeg, imu.yawDeg, imu.gyroZ) * speedMultiplier,
+      -MAX_YAW_CORRECTION_PERCENT, MAX_YAW_CORRECTION_PERCENT
+    );
   }
 
   driveRobot(xCommand, yCommand, turnCommand);
