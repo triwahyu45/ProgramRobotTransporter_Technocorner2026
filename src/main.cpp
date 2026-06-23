@@ -32,7 +32,10 @@ constexpr bool INVERT_MOVE_X = false;
 constexpr bool INVERT_MOVE_Y = true;
 constexpr bool INVERT_ROTATE = false;
 constexpr bool YAW_CORRECTION_INVERTED_DEFAULT = true;
-constexpr bool DRIVE_CLOSED_LOOP_DEFAULT = true;
+// DRIVE_CLOSED_LOOP_DEFAULT = false karena encoder RR (GPIO36/39) noise 2500+ RPM
+// dan encoder RL (GPIO34/35) tidak terdeteksi. Open-loop jauh lebih smooth untuk kompetisi.
+// Aktifkan closed-loop manual via serial 'drive closed' setelah hardware encoder fix.
+constexpr bool DRIVE_CLOSED_LOOP_DEFAULT = false;
 constexpr bool RESET_BLUETOOTH_PAIRING_ON_BOOT = false;
 
 struct YawPid {
@@ -105,6 +108,7 @@ bool lastL1 = false;
 bool lastL2 = false;
 bool lastR1 = false;
 bool lastR2 = false;
+bool wheelTestActive = false;  // true saat mode test arah roda aktif (tahan Triangle)
 
 Preferences preferences;
 WebServer server(80);
@@ -605,6 +609,48 @@ void toggleYawHoldFromGamepad() {
 }
 
 void processGamepad(ControllerPtr ctl) {
+  static uint32_t lastLedUpdateMs = 0;
+  static uint8_t lastBatteryLevel = 255;
+  static ControllerPtr lastCtl = nullptr;
+
+  if (ctl && ctl->isConnected()) {
+    if (ctl != lastCtl || millis() - lastLedUpdateMs > 5000 || ctl->battery() != lastBatteryLevel) {
+      lastLedUpdateMs = millis();
+      lastBatteryLevel = ctl->battery();
+      lastCtl = ctl;
+
+      uint8_t r = 0, g = 0, b = 0;
+      if (lastBatteryLevel == 0 || lastBatteryLevel == 255) {
+        // Unknown or not available: Dim Blue
+        r = 0;
+        g = 0;
+        b = 64;
+      } else if (lastBatteryLevel <= 63) {
+        // 1 - 63: Red
+        r = 255;
+        g = 0;
+        b = 0;
+      } else if (lastBatteryLevel <= 127) {
+        // 64 - 127: Orange
+        r = 255;
+        g = 100;
+        b = 0;
+      } else if (lastBatteryLevel <= 191) {
+        // 128 - 191: Yellow-Green/Lime
+        r = 128;
+        g = 255;
+        b = 0;
+      } else {
+        // 192 - 254: Green
+        r = 0;
+        g = 255;
+        b = 0;
+      }
+      ctl->setColorLED(r, g, b);
+      Serial.printf("[Gamepad] Battery: %d, LED color set to R:%d G:%d B:%d\n", lastBatteryLevel, r, g, b);
+    }
+  }
+
   // ─── Trigger Config Mode (Share + Options ditahan 2 detik) ───
   static uint32_t configTriggerStartMs = 0;
   if (ctl && ctl->isConnected() && ctl->miscSelect() && ctl->miscStart() && !ctl->l1() && !ctl->r1()) {
@@ -783,6 +829,42 @@ void processGamepad(ControllerPtr ctl) {
   }
 
   updateSpeedButtons(ctl);
+
+  // ─── Wheel Direction Test Mode (tahan Triangle + L1/R1/L2/R2) ─────────────
+  // L1 = FL, R1 = FR, L2 = RL, R2 = RR — spin pelan 25% raw untuk cek arah roda
+  // Lepas Triangle untuk keluar dari mode ini.
+  {
+    const bool triHeld = ctl->y();  // Triangle di Bluepad32 = y()
+    const bool wl1 = ctl->l1();
+    const bool wr1 = ctl->r1();
+    const float wl2 = (float)ctl->brake()    / 1023.0f;
+    const float wr2 = (float)ctl->throttle() / 1023.0f;
+    const bool wl2p = wl2 > 0.1f;
+    const bool wr2p = wr2 > 0.1f;
+
+    if (triHeld && (wl1 || wr1 || wl2p || wr2p)) {
+      // Mode test aktif — override semua gerakan
+      wheelTestActive = true;
+      constexpr int16_t TEST_CMD = 8192;  // ~25% dari 32767
+      int16_t fl = wl1  ? TEST_CMD : 0;
+      int16_t fr = wr1  ? TEST_CMD : 0;
+      int16_t rl = wl2p ? TEST_CMD : 0;
+      int16_t rr = wr2p ? TEST_CMD : 0;
+      SpeedController().setEnabled(false);
+      DriveAll(fl, fr, rl, rr);
+      Serial.printf("[WheelTest] FL=%d FR=%d RL=%d RR=%d\n", fl, fr, rl, rr);
+      return;  // jangan proses gerakan normal
+    } else if (wheelTestActive) {
+      // Baru keluar dari mode test — stop dan re-enable PID
+      wheelTestActive = false;
+      stopWithBrake();
+      if (driveClosedLoopEnabled) {
+        SpeedController().setEnabled(true);
+      }
+      Serial.println("[WheelTest] Mode test selesai.");
+    }
+  }
+  // ──────────────────────────────────────────────────────────────────────────
 
   const bool crossButton = ctl->a();
   const bool squareButton = ctl->x();
@@ -966,6 +1048,50 @@ void resetEncodersAndSpeedPid() {
 }
 
 void handleCalibrationCommand(const String &line) {
+  static float pprCalibTurns = 20.0f;
+
+  if (line.indexOf(" ppr start") != -1) {
+    int index = line.indexOf("start ");
+    if (index != -1) {
+      pprCalibTurns = line.substring(index + 6).toFloat();
+      if (pprCalibTurns <= 0.0f) pprCalibTurns = 20.0f;
+    } else {
+      pprCalibTurns = 20.0f;
+    }
+    SpeedController().setEnabled(false);
+    CoastAll();
+    Encoders().reset();
+    Serial.printf("[Calib] PPR Calibration STARTED. Rotate each wheel exactly %.1f full turns by hand, then type 'calib ppr stop'\n", pprCalibTurns);
+    return;
+  } else if (line.endsWith(" ppr stop")) {
+    int32_t fl = abs(Encoders().count(WHEEL_FL));
+    int32_t fr = abs(Encoders().count(WHEEL_FR));
+    int32_t rl = abs(Encoders().count(WHEEL_RL));
+    int32_t rr = abs(Encoders().count(WHEEL_RR));
+
+    float pprFL = static_cast<float>(fl) / pprCalibTurns;
+    float pprFR = static_cast<float>(fr) / pprCalibTurns;
+    float pprRL = static_cast<float>(rl) / pprCalibTurns;
+    float pprRR = static_cast<float>(rr) / pprCalibTurns;
+
+    Serial.println("\n=== PPR Calibration Results ===");
+    Serial.printf("Raw Ticks collected: FL=%ld, FR=%ld, RL=%ld, RR=%ld\n", (long)fl, (long)fr, (long)rl, (long)rr);
+    Serial.printf("Calculated PPR (for %.1f turns):\n", pprCalibTurns);
+    Serial.printf("  FL: %.2f\n", pprFL);
+    Serial.printf("  FR: %.2f\n", pprFR);
+    Serial.printf("  RL: %.2f\n", pprRL);
+    Serial.printf("  RR: %.2f\n", pprRR);
+
+    Encoders().setPpr(WHEEL_FL, pprFL);
+    Encoders().setPpr(WHEEL_FR, pprFR);
+    Encoders().setPpr(WHEEL_RL, pprRL);
+    Encoders().setPpr(WHEEL_RR, pprRR);
+    Serial.println("PPR settings saved to NVS and applied dynamically.");
+
+    stopWithBrake();
+    return;
+  }
+
   stopWithBrake();
 
   if (line.endsWith(" imu")) {
@@ -977,7 +1103,7 @@ void handleCalibrationCommand(const String &line) {
     resetEncodersAndSpeedPid();
     Imu().startGyroCalibration();
   } else {
-    Serial.println("Usage: calib imu | calib enc | calib all");
+    Serial.println("Usage: calib imu | calib enc | calib all | calib ppr start [turns] | calib ppr stop");
   }
 }
 

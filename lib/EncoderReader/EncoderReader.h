@@ -33,10 +33,14 @@ public:
   EncoderSample sample(uint8_t wheel, uint32_t elapsedUs);
   void printConfig(Stream &out) const;
 
+  void setPpr(uint8_t wheel, float ppr);
+  float ppr(uint8_t wheel) const;
+
   static void handleInterrupt(uint8_t wheel);
 
 private:
   void beginChannel(uint8_t wheel, const EncoderPins &pins);
+  float _ppr[WHEEL_COUNT] = {1560.0f, 1560.0f, 1560.0f, 1560.0f};
 };
 
 EncoderHub &Encoders();

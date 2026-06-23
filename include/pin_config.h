@@ -25,27 +25,43 @@
 #define PIN_ENC4B           39
 
 // Encoder tuning.
-// Change this after Encoder_Test shows the real count per one wheel revolution.
-// Count mode is x4 quadrature because both A/B edges are counted.
-#define ENCODER_COUNTS_PER_REV  1560.0f
+// PPR (Pulses Per Revolution) dikalibrasi manual via 'calib ppr start 20'.
+// Nilai ini hanya dipakai sebagai FALLBACK jika NVS belum terisi.
+// Hasil kalibrasi 2026-06-24:
+//   FL=408.95, FR=408.00 (gearbox depan, rasio tinggi)
+//   RL=193.70, RR=195.10 (gearbox belakang, rasio rendah)
+// Gunakan rata-rata sebagai fallback default:
+#define ENCODER_COUNTS_PER_REV  300.0f
 
-// Max wheel RPM measured physically via ramp test (100% PWM, no load on floor):
-//   FL≈119, FR≈122, RL≈108, RR≈110 → use 120 as safe ceiling.
-#define MAX_WHEEL_RPM           120.0f
+// PPR per-wheel fallback (dipakai jika NVS belum ada nilai kalibrasi).
+#define ENCODER_PPR_FL          408.95f
+#define ENCODER_PPR_FR          408.00f
+#define ENCODER_PPR_RL          193.70f
+#define ENCODER_PPR_RR          195.10f
 
-// ─── Motor PWM Deadband (from ramp test 2026-06-21) ─────────────────────────
-// Min PWM% before wheel starts moving (at which RPM first exceeds ~5 rpm).
-// Used by WheelSpeedController feed-forward to avoid dead zone.
-// FL & FR start at ~10%, RL & RR start at ~20%.
-#define MOTOR_MIN_PWM_FL        10.0f   // percent, 0-100
-#define MOTOR_MIN_PWM_FR        10.0f
+// Max wheel RPM — roda depan vs belakang punya gearbox beda rasio.
+// Roda depan lebih lambat (rasio gearbox lebih tinggi → lebih torsi, lebih lambat).
+// Roda belakang lebih cepat (gearbox asli).
+// Nilai ini ceiling untuk PID; tuning lebih lanjut bisa via ramp test.
+#define MAX_WHEEL_RPM           80.0f    // ceiling aman untuk kedua jenis gearbox
+#define MAX_WHEEL_RPM_FRONT     60.0f   // roda depan (gearbox baru, lebih torsi)
+#define MAX_WHEEL_RPM_REAR      80.0f   // roda belakang (gearbox lama)
+
+// ─── Motor PWM Deadband ────────────────────────────────────────────────────────
+// Min PWM% sebelum roda mulai bergerak.
+// Setelah gearbox swap 2026-06-24:
+//   Roda depan (gearbox baru, torsi lebih tinggi) → perlu PWM lebih besar untuk mulai
+//   Roda belakang (gearbox lama) → sama seperti sebelumnya
+#define MOTOR_MIN_PWM_FL        18.0f   // percent, 0-100
+#define MOTOR_MIN_PWM_FR        18.0f
 #define MOTOR_MIN_PWM_RL        20.0f
 #define MOTOR_MIN_PWM_RR        20.0f
 
 // Max measured RPM at 100% PWM (physical ramp test, no load).
-// Used for feed-forward scaling in closed-loop controller.
-#define MOTOR_MAX_RPM_FL        119.0f
-#define MOTOR_MAX_RPM_FR        122.0f
+// Roda depan (gearbox baru) lebih lambat dari belakang — perlu ramp test ulang.
+// Estimasi sementara berdasarkan rasio gearbox (408/193 ≈ 2.1x lebih lambat dari roda belakang).
+#define MOTOR_MAX_RPM_FL        55.0f   // estimasi setelah gearbox baru (PERLU RAMP TEST)
+#define MOTOR_MAX_RPM_FR        55.0f   // estimasi setelah gearbox baru (PERLU RAMP TEST)
 #define MOTOR_MAX_RPM_RL        108.0f
 #define MOTOR_MAX_RPM_RR        110.0f
 

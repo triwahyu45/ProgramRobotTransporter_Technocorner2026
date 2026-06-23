@@ -1,6 +1,7 @@
 #include "EncoderReader.h"
 
 #include "pin_config.h"
+#include <Preferences.h>
 
 namespace {
 constexpr EncoderPins ENCODER_PINS[WHEEL_COUNT] = {
@@ -43,6 +44,15 @@ void EncoderHub::beginChannel(uint8_t wheel, const EncoderPins &pins) {
 }
 
 void EncoderHub::begin() {
+  // Load custom wheel PPR from NVS Preferences, fall back to per-wheel macro constants
+  Preferences prefs;
+  prefs.begin("encoder_calib", true); // read-only
+  _ppr[WHEEL_FL] = prefs.getFloat("ppr_fl", ENCODER_PPR_FL);
+  _ppr[WHEEL_FR] = prefs.getFloat("ppr_fr", ENCODER_PPR_FR);
+  _ppr[WHEEL_RL] = prefs.getFloat("ppr_rl", ENCODER_PPR_RL);
+  _ppr[WHEEL_RR] = prefs.getFloat("ppr_rr", ENCODER_PPR_RR);
+  prefs.end();
+
   beginChannel(WHEEL_FL, ENCODER_PINS[WHEEL_FL]);
   beginChannel(WHEEL_FR, ENCODER_PINS[WHEEL_FR]);
   beginChannel(WHEEL_RL, ENCODER_PINS[WHEEL_RL]);
@@ -52,10 +62,14 @@ void EncoderHub::begin() {
   attachInterrupt(digitalPinToInterrupt(PIN_ENC1B), isrFL, CHANGE);
   attachInterrupt(digitalPinToInterrupt(PIN_ENC2A), isrFR, CHANGE);
   attachInterrupt(digitalPinToInterrupt(PIN_ENC2B), isrFR, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(PIN_ENC3A), isrRL, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(PIN_ENC3B), isrRL, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(PIN_ENC4A), isrRR, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(PIN_ENC4B), isrRR, CHANGE);
+  // GPIO 34/35 (RL) dan 36/39 (RR) adalah input-only pins tanpa pull-up internal.
+  // Tanpa pull-up eksternal, pin ini menghasilkan noise ribuan interrupt/detik
+  // yang overload CPU dan merusak closed-loop PID.
+  // DISABLED: attachInterrupt untuk RL dan RR sampai hardware fix (tambah pull-up 10k).
+  // attachInterrupt(digitalPinToInterrupt(PIN_ENC3A), isrRL, CHANGE);
+  // attachInterrupt(digitalPinToInterrupt(PIN_ENC3B), isrRL, CHANGE);
+  // attachInterrupt(digitalPinToInterrupt(PIN_ENC4A), isrRR, CHANGE);
+  // attachInterrupt(digitalPinToInterrupt(PIN_ENC4B), isrRR, CHANGE);
 }
 
 void EncoderHub::reset() {
@@ -97,14 +111,32 @@ EncoderSample EncoderHub::sample(uint8_t wheel, uint32_t elapsedUs) {
   lastSampleCounts[wheel] = nowCount;
 
   const float minutes = static_cast<float>(elapsedUs) / 60000000.0f;
-  const float revolutions = static_cast<float>(delta) / ENCODER_COUNTS_PER_REV;
+  const float revolutions = static_cast<float>(delta) / _ppr[wheel];
   return {nowCount, delta, revolutions / minutes};
+}
+
+void EncoderHub::setPpr(uint8_t wheel, float pprVal) {
+  if (wheel >= WHEEL_COUNT || pprVal <= 0.0f) return;
+  _ppr[wheel] = pprVal;
+
+  Preferences prefs;
+  prefs.begin("encoder_calib", false); // read-write
+  if (wheel == WHEEL_FL) prefs.putFloat("ppr_fl", pprVal);
+  else if (wheel == WHEEL_FR) prefs.putFloat("ppr_fr", pprVal);
+  else if (wheel == WHEEL_RL) prefs.putFloat("ppr_rl", pprVal);
+  else if (wheel == WHEEL_RR) prefs.putFloat("ppr_rr", pprVal);
+  prefs.end();
+}
+
+float EncoderHub::ppr(uint8_t wheel) const {
+  if (wheel >= WHEEL_COUNT) return ENCODER_COUNTS_PER_REV;
+  return _ppr[wheel];
 }
 
 void EncoderHub::printConfig(Stream &out) const {
   out.println("=== Encoder Config ===");
-  out.print("Counts per wheel rev: ");
-  out.println(ENCODER_COUNTS_PER_REV, 2);
+  out.printf("PPR Settings        : FL=%.2f, FR=%.2f, RL=%.2f, RR=%.2f\n",
+             _ppr[WHEEL_FL], _ppr[WHEEL_FR], _ppr[WHEEL_RL], _ppr[WHEEL_RR]);
   out.print("Max wheel RPM: ");
   out.println(MAX_WHEEL_RPM, 1);
   out.println("FL/ENC1 A=16 B=17, FR/ENC2 A=25 B=26, RL/ENC3 A=34 B=35, RR/ENC4 A=36 B=39");
