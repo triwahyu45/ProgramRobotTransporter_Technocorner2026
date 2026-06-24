@@ -898,25 +898,41 @@ void processGamepad(ControllerPtr ctl) {
         }
       }
 
-      // X atau O = save servo yang terakhir diubah (simpan min+max ke NVS)
-      static bool lastXO = false;
-      const bool xoBtn = xBtn || oBtn;
-      if (xoBtn && !lastXO && lastServo != 0) {
+      // X = save BUKA (open/min) servo terakhir diubah
+      static bool lastX = false;
+      if (xBtn && !lastX && lastServo != 0) {
         preferences.begin("config", false);
         if (lastServo == 1) {
           preferences.putFloat("claw_bel_min", cfg_claw_belakang_min);
-          preferences.putFloat("claw_bel_max", cfg_claw_belakang_max);
-          Serial.printf("[ClawCalib] Belakang saved: open=%.0f close=%.0f\n",
-                        cfg_claw_belakang_min, cfg_claw_belakang_max);
+          Serial.printf("[ClawCalib] Belakang BUKA saved: open=%.0f\n", cfg_claw_belakang_min);
         } else {
           preferences.putFloat("claw_dep_min", cfg_claw_depan_min);
-          preferences.putFloat("claw_dep_max", cfg_claw_depan_max);
-          Serial.printf("[ClawCalib] Depan saved: open=%.0f close=%.0f\n",
-                        cfg_claw_depan_min, cfg_claw_depan_max);
+          Serial.printf("[ClawCalib] Depan BUKA saved: open=%.0f\n", cfg_claw_depan_min);
         }
         preferences.end();
+        // Gerak servo ke posisi buka biar keliatan
+        if (lastServo == 1) gripperRear.setClaw(false);
+        else                gripperFront.setClaw(false);
       }
-      lastXO = xoBtn;
+      lastX = xBtn;
+
+      // O = save TUTUP (close/max) servo terakhir diubah
+      static bool lastO = false;
+      if (oBtn && !lastO && lastServo != 0) {
+        preferences.begin("config", false);
+        if (lastServo == 1) {
+          preferences.putFloat("claw_bel_max", cfg_claw_belakang_max);
+          Serial.printf("[ClawCalib] Belakang TUTUP saved: close=%.0f\n", cfg_claw_belakang_max);
+        } else {
+          preferences.putFloat("claw_dep_max", cfg_claw_depan_max);
+          Serial.printf("[ClawCalib] Depan TUTUP saved: close=%.0f\n", cfg_claw_depan_max);
+        }
+        preferences.end();
+        // Gerak servo ke posisi tutup biar keliatan
+        if (lastServo == 1) gripperRear.setClaw(true);
+        else                gripperFront.setClaw(true);
+      }
+      lastO = oBtn;
 
       // Print status tiap 300ms
       if (millis() - printMs > 300) {
