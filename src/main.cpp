@@ -20,7 +20,7 @@ constexpr const char *ALLOWED_CONTROLLER_BTADDR = "f7:87:e0:28:75:18";
 constexpr uint16_t PCA_MOTOR_PWM_FREQ_HZ = 1500;
 constexpr uint32_t TELEMETRY_PERIOD_MS = 500;
 constexpr uint32_t SERIAL_LINE_TIMEOUT_MS = 80;
-constexpr int STICK_DEADZONE = 120;  // dinaikkan dari 60: stick drift bikin FR+RL jalan sendiri
+constexpr int STICK_DEADZONE = 50;   // 50/512 = ~10% deadzone - cukup untuk filter drift, gak terlalu besar
 constexpr int STICK_MAX = 512;
 constexpr float DPAD_MOVE_PERCENT = 40.0f;           // D-pad speed
 // Speed: open-loop, 55% PWM langsung ke ZK-5AD. Deadband FL=20%, FR=25%.
@@ -512,6 +512,8 @@ bool isControllerAllowed(ControllerPtr ctl) {
 float axisToPercent(int axis) {
   axis = constrain(axis, -STICK_MAX, STICK_MAX);
   if (abs(axis) < STICK_DEADZONE) return 0.0f;
+  // Formula lama: langsung scale axis/STICK_MAX
+  // Deadzone=50 filter drift(4), output 29%+ di defleksi moderat (>atas deadband motor)
   return constrain((static_cast<float>(axis) / STICK_MAX) * 100.0f, -100.0f, 100.0f);
 }
 
