@@ -40,7 +40,7 @@ constexpr float IDLE_YAW_MAX_TURN_PERCENT = 35.0f;
 constexpr bool INVERT_MOVE_X = false;
 constexpr bool INVERT_MOVE_Y = true;
 constexpr bool INVERT_ROTATE = false;
-constexpr bool YAW_CORRECTION_INVERTED_DEFAULT = true;   // true = arah koreksi benar
+constexpr bool YAW_CORRECTION_INVERTED_DEFAULT = false;  // false = arah koreksi benar
 
 // DRIVE_CLOSED_LOOP: DEFAULT = false (open-loop) karena motor ZK-5AD punya respons non-linear.
 // Di RPM rendah (<50% PWM), actual RPM JAUH lebih tinggi dari prediksi linear feedforward.
