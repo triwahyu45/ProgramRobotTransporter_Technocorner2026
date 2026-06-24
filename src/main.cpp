@@ -38,6 +38,7 @@ constexpr float MAX_YAW_CORRECTION_PERCENT = 50.0f;
 // Efek: robot hold heading kuat, error >3° selalu dikoreksi dengan MINIMUM 28% power.
 constexpr float YAW_HOLD_DEADBAND_DEG    = 3.0f;
 constexpr float YAW_MIN_CORRECTION_PERCENT = 28.0f;  // just above FR motor deadband (25%)
+constexpr bool IDLE_YAW_HOLD_ENABLED_DEFAULT = true;
 constexpr float IDLE_YAW_MAX_TURN_PERCENT = 50.0f;
 constexpr bool INVERT_MOVE_X = false;
 constexpr bool INVERT_MOVE_Y = true;
@@ -687,20 +688,37 @@ void processGamepad(ControllerPtr ctl) {
     }
   }
 
-  // ─── Trigger Config Mode (Share + Options ditahan 2 detik) ───
-  static uint32_t configTriggerStartMs = 0;
+  // ─── BT Re-pair Restart (Share + Options ditahan 2 detik) ───
+  // Share = miscSelect, Options = miscStart
+  static uint32_t btRestartTriggerMs = 0;
   if (ctl && ctl->isConnected() && ctl->miscSelect() && ctl->miscStart() && !ctl->l1() && !ctl->r1()) {
-    if (configTriggerStartMs == 0) {
-      configTriggerStartMs = millis();
-      Serial.println("[System] Tombol Share + Options ditekan. Tahan 2 detik untuk masuk mode kalibrasi WiFi...");
-    } else if (millis() - configTriggerStartMs > 2000) {
-      Serial.println("[System] Memasuki Mode Kalibrasi WiFi! Rebooting...");
+    if (btRestartTriggerMs == 0) {
+      btRestartTriggerMs = millis();
+      Serial.println("[System] Share+Options ditekan. Tahan 2 detik untuk restart BT re-pair...");
+    } else if (millis() - btRestartTriggerMs > 2000) {
+      Serial.println("[System] Restarting untuk BT re-pair...");
+      stopWithBrake();
+      delay(300);
+      ESP.restart();
+    }
+  } else {
+    btRestartTriggerMs = 0;
+  }
+
+  // ─── WiFi Config Mode (L1 + R1 + Options ditahan 3 detik) ───
+  static uint32_t wifiConfigTriggerMs = 0;
+  if (ctl && ctl->isConnected() && ctl->l1() && ctl->r1() && ctl->miscStart() && !ctl->miscSelect()) {
+    if (wifiConfigTriggerMs == 0) {
+      wifiConfigTriggerMs = millis();
+      Serial.println("[System] L1+R1+Options ditekan. Tahan 3 detik untuk masuk WiFi Config Mode...");
+    } else if (millis() - wifiConfigTriggerMs > 3000) {
+      Serial.println("[System] Memasuki WiFi Config Mode! Rebooting...");
       setBootMode(1);
       delay(500);
       ESP.restart();
     }
   } else {
-    configTriggerStartMs = 0;
+    wifiConfigTriggerMs = 0;
   }
 
   // ─── Trigger IMU Gyro Calibration (L1 + R1 + Share + Options ditahan 3 detik) ───
@@ -708,7 +726,7 @@ void processGamepad(ControllerPtr ctl) {
   if (ctl && ctl->isConnected() && ctl->l1() && ctl->r1() && ctl->miscSelect() && ctl->miscStart()) {
     if (imuCalibTriggerStartMs == 0) {
       imuCalibTriggerStartMs = millis();
-      Serial.println("[System] Tombol L1+R1+Share+Options ditekan. Tahan 3 detik untuk kalibrasi Gyro...");
+      Serial.println("[System] L1+R1+Share+Options ditekan. Tahan 3 detik untuk kalibrasi Gyro...");
     } else if (millis() - imuCalibTriggerStartMs > 3000) {
       Serial.println("[System] Memulai Kalibrasi Gyro dari Gamepad...");
       stopWithBrake();
@@ -717,23 +735,6 @@ void processGamepad(ControllerPtr ctl) {
     }
   } else {
     imuCalibTriggerStartMs = 0;
-  }
-
-  // ─── BT Re-pair Restart (L1 + R1 + L3 + R3 tahan 2 detik) ───
-  // Aman: butuh 4 tombol sekaligus + tahan 2 detik, tidak mungkin keinjak tidak sengaja.
-  static uint32_t btRestartTriggerMs = 0;
-  if (ctl && ctl->isConnected() && ctl->l1() && ctl->r1() && ctl->thumbL() && ctl->thumbR()) {
-    if (btRestartTriggerMs == 0) {
-      btRestartTriggerMs = millis();
-      Serial.println("[System] L1+R1+L3+R3 ditekan. Tahan 2 detik untuk restart BT re-pair...");
-    } else if (millis() - btRestartTriggerMs > 2000) {
-      Serial.println("[System] Restarting ESP32 untuk BT re-pair...");
-      stopWithBrake();
-      delay(300);
-      ESP.restart();
-    }
-  } else {
-    btRestartTriggerMs = 0;
   }
 
   // ─── Gripper diupdate SELALU, bahkan saat calibrating / disconnect ───
@@ -1329,7 +1330,7 @@ void handleCommand(String line) {
     ESP.restart();
   } else if (cmd.name == "heading") {
     // heading <deg> - set target heading dari serial, aktifkan yaw hold
-    if (cmd.args.size() > 0) {
+    if (cmd.count > 0) {
       yawTargetDeg = argOr(cmd, 0, yawTargetDeg);
       yawHoldEnabled = true;
       idleYawHoldEnabled = true;
