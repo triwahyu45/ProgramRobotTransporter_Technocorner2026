@@ -36,7 +36,7 @@ constexpr float MAX_YAW_CORRECTION_PERCENT = 45.0f;  // DRIVING: batas saat gera
 // Deadband 3°: stop koreksi kecil di bawah batas drift IMU.
 // YAW_MIN_CORRECTION: snap output ke minimum ini agar motor PASTI bergerak (motor deadband ~25%).
 // Efek: robot hold heading kuat, error >3° selalu dikoreksi dengan MINIMUM 28% power.
-constexpr float YAW_HOLD_DEADBAND_DEG      = 1.5f;   // lock angle: koreksi mulai dari 1.5deg
+constexpr float YAW_HOLD_DEADBAND_DEG      = 2.0f;   // lock angle: koreksi mulai dari 2.0deg
 constexpr float YAW_MIN_CORRECTION_PERCENT  = 35.0f;  // snap min: lebih dari deadband motor (was 28)
 constexpr bool  IDLE_YAW_HOLD_ENABLED_DEFAULT = true;
 constexpr float IDLE_YAW_MAX_TURN_PERCENT   = 100.0f; // IDLE: full speed snap (robot diam)
@@ -54,7 +54,7 @@ constexpr bool DRIVE_CLOSED_LOOP_DEFAULT = false;
 constexpr bool RESET_BLUETOOTH_PAIRING_ON_BOOT = false;
 
 struct YawPid {
-  float kp = 5.00f;  // FAST: autotune optimal at MAX=100% (was 3.0)
+  float kp = 4.00f;  // Tuned: was 5.0, kurangi untuk redam osilasi koreksi yaw
   float ki = 0.0f;
   float kd = 0.70f;  // LOW KD = terminal velocity tinggi, zero overshoot (was 1.5)
   float integral  = 0.0f;
@@ -88,7 +88,7 @@ bool lastSquareButton = false;
 bool lastStartButton = false;
 
 // ─── Configurable Parameters (NVS Preferences) ──────────────────────────
-float cfg_pid_kp = 5.00f;   // Autotune final: rise 0.1s zero overshoot
+float cfg_pid_kp = 4.00f;   // Tuned: was 5.0
  float cfg_pid_ki = 0.0f;
 float cfg_pid_kd = 0.70f;
 
@@ -138,7 +138,7 @@ bool inConfigMode = false;
 
 void loadConfigurations() {
   preferences.begin("robot_cfg", true); // read-only
-  cfg_pid_kp = preferences.getFloat("pid_kp", 5.00f);
+  cfg_pid_kp = preferences.getFloat("pid_kp", 4.00f);
   cfg_pid_ki = preferences.getFloat("pid_ki", 0.0f);
   cfg_pid_kd = preferences.getFloat("pid_kd", 0.70f);
 
@@ -854,7 +854,7 @@ void processGamepad(ControllerPtr ctl) {
     // R2 ditekan (front lifter): L1=CCW pelan, L2=CW pelan (L2 override rear lifter)
     // L2 ditekan (rear lifter):  R1=CW pelan
     // Speed pelan 25% — untuk fine positioning saat operasi gripper
-    constexpr float SLOW_ROT = 25.0f;
+    constexpr float SLOW_ROT = 40.0f;
     if (triggerR2 > 0.3f) {
       if (l1) {
         slowRotateActive = true;
