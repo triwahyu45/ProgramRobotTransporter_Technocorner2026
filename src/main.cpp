@@ -1022,48 +1022,55 @@ void processGamepad(ControllerPtr ctl) {
 
     // ── Dalam MODE_CALIB_LIFT ─────────────────────────────────────────────
     if (robotMode == MODE_CALIB_LIFT && hasCtl) {
-      const bool  l1b  = ctl->l1();
-      const bool  r1b  = ctl->r1();
-      const float tL2  = (float)ctl->brake()    / 1023.0f;
-      const float tR2  = (float)ctl->throttle() / 1023.0f;
-      const bool  xBtn = ctl->a();
-      const bool  oBtn = ctl->b();
+      const bool l1b  = ctl->l1();                                    // rear -1°
+      const bool l2b  = (float)ctl->brake()    / 1023.0f > 0.3f;     // rear +1°
+      const bool r1b  = ctl->r1();                                    // front -1°
+      const bool r2b  = (float)ctl->throttle() / 1023.0f > 0.3f;     // front +1°
+      const bool xBtn = ctl->a();   // X = save posisi ini sebagai UP
+      const bool oBtn = ctl->b();   // O = save posisi ini sebagai DOWN
 
-      static uint8_t lastLift = 0; // 0=none 1=belakang 2=depan
+      // Working angle per lifter
+      static float workR = -1.0f;
+      static float workF = -1.0f;
+      static uint8_t lastLift = 0; // 1=rear 2=front
 
-      // Tick 100ms: +/- 1 derajat
-      if (millis() - tickMs > 100) {
-        bool changedR = false, changedF = false;
-        if (l1b)        { cfg_lift_belakang_min = constrain(cfg_lift_belakang_min - 1.0f, 0.0f, 175.0f); changedR = true; lastLift = 1; }
-        if (tL2 > 0.3f) { cfg_lift_belakang_max = constrain(cfg_lift_belakang_max + 1.0f, 1.0f, 180.0f); changedR = true; lastLift = 1; }
-        if (r1b)        { cfg_lift_depan_min    = constrain(cfg_lift_depan_min    - 1.0f, 0.0f, 175.0f); changedF = true; lastLift = 2; }
-        if (tR2 > 0.3f) { cfg_lift_depan_max    = constrain(cfg_lift_depan_max    + 1.0f, 1.0f, 180.0f); changedF = true; lastLift = 2; }
-        if (changedR || changedF) {
-          updateGripperConfigs();
-          tickMs = millis();
-          if (l1b)        gripperRear.setLifter(1.0f);   // preview UP
-          if (tL2 > 0.3f) gripperRear.setLifter(0.0f);   // preview DOWN
-          if (r1b)        gripperFront.setLifter(1.0f);  // preview UP
-          if (tR2 > 0.3f) gripperFront.setLifter(0.0f);  // preview DOWN
+      if (workR < 0.0f) workR = cfg_lift_belakang_min;
+      if (workF < 0.0f) workF = cfg_lift_depan_min;
+
+      // Key-repeat: klik=1°, tahan 1det → repeat tiap 300ms
+      struct KeyRep {
+        bool prev=false; uint32_t holdStart=0, lastRepeat=0;
+        bool tick(bool cur, uint32_t now) {
+          bool fire=false;
+          if (cur && !prev)          { fire=true; holdStart=lastRepeat=now; }
+          else if (cur && prev && now-holdStart>=1000 && now-lastRepeat>=300) { fire=true; lastRepeat=now; }
+          prev=cur; return fire;
         }
-      }
+      };
+      static KeyRep krL1, krL2, krR1, krR2;
+      uint32_t now = millis();
 
-      // X = save UP (min) lifter terakhir
+      if (krL1.tick(l1b, now)) { workR = constrain(workR - 1.0f, 0.0f, 180.0f); lastLift = 1; servoLiftRear.setAngle(workR); }
+      if (krL2.tick(l2b, now)) { workR = constrain(workR + 1.0f, 0.0f, 180.0f); lastLift = 1; servoLiftRear.setAngle(workR); }
+      if (krR1.tick(r1b, now)) { workF = constrain(workF - 1.0f, 0.0f, 180.0f); lastLift = 2; servoLiftFront.setAngle(workF); }
+      if (krR2.tick(r2b, now)) { workF = constrain(workF + 1.0f, 0.0f, 180.0f); lastLift = 2; servoLiftFront.setAngle(workF); }
+
+      // X = save posisi sekarang sebagai UP (min)
       static bool lastX = false;
       if (xBtn && !lastX && lastLift != 0) {
         preferences.begin("config", false);
-        if (lastLift == 1) { preferences.putFloat("lift_r_min", cfg_lift_belakang_min); Serial.printf("[LiftCalib] Belakang UP saved: %.0f\n", cfg_lift_belakang_min); }
-        else               { preferences.putFloat("lift_f_min", cfg_lift_depan_min);    Serial.printf("[LiftCalib] Depan UP saved: %.0f\n",    cfg_lift_depan_min);    }
+        if (lastLift == 1) { cfg_lift_belakang_min = workR; preferences.putFloat("lift_r_min", workR); Serial.printf("[LiftCalib] Belakang UP saved: %.0f\n", workR); }
+        else               { cfg_lift_depan_min    = workF; preferences.putFloat("lift_f_min", workF); Serial.printf("[LiftCalib] Depan UP saved: %.0f\n",    workF); }
         preferences.end();
       }
       lastX = xBtn;
 
-      // O = save DOWN (max) lifter terakhir
+      // O = save posisi sekarang sebagai DOWN (max)
       static bool lastO = false;
       if (oBtn && !lastO && lastLift != 0) {
         preferences.begin("config", false);
-        if (lastLift == 1) { preferences.putFloat("lift_r_max", cfg_lift_belakang_max); Serial.printf("[LiftCalib] Belakang DOWN saved: %.0f\n", cfg_lift_belakang_max); }
-        else               { preferences.putFloat("lift_f_max", cfg_lift_depan_max);    Serial.printf("[LiftCalib] Depan DOWN saved: %.0f\n",    cfg_lift_depan_max);    }
+        if (lastLift == 1) { cfg_lift_belakang_max = workR; preferences.putFloat("lift_r_max", workR); Serial.printf("[LiftCalib] Belakang DOWN saved: %.0f\n", workR); }
+        else               { cfg_lift_depan_max    = workF; preferences.putFloat("lift_f_max", workF); Serial.printf("[LiftCalib] Depan DOWN saved: %.0f\n",    workF); }
         preferences.end();
       }
       lastO = oBtn;
@@ -1071,28 +1078,23 @@ void processGamepad(ControllerPtr ctl) {
       // Print tiap 300ms
       if (millis() - printMs > 300) {
         printMs = millis();
-        Serial.printf("[LiftCalib] [%s] F: up=%.0f dn=%.0f | R: up=%.0f dn=%.0f\n",
+        Serial.printf("[LiftCalib] [%s] workR=%.0f workF=%.0f | saved F:up=%.0f dn=%.0f R:up=%.0f dn=%.0f\n",
                       lastLift==1?"R*":lastLift==2?"F*":"--",
+                      workR, workF,
                       cfg_lift_depan_min, cfg_lift_depan_max,
                       cfg_lift_belakang_min, cfg_lift_belakang_max);
       }
 
-      // Share (tanpa Square) = save semua & keluar
-      if (ctl->miscSelect() && !ctl->x() && millis() - debMs > 3000) {
-        saveConfigurations();
-        robotMode = MODE_NORMAL; debMs = millis();
-        startGripperWiggle(3);
-        Serial.printf("[LiftCalib] SAVED ALL & EXIT\n");
-      }
-
-      // Square+Share 3det = keluar alternatif
+      // Square+Share 3det = EXIT + auto-save semua (satu-satunya cara keluar)
       if (calibBtn) {
         if (!holdActive) { holdActive = true; holdStartMs = millis(); }
         uint32_t held = millis() - holdStartMs;
-        if (held >= 1000 && held < 1100) Serial.println("[LiftCalib] Tahan 2 detik lagi untuk keluar...");
-        if (held >= 2000 && held < 2100) Serial.println("[LiftCalib] Tahan 1 detik lagi untuk keluar...");
-        if (held >= 3000 && millis() - debMs > 3000) {
+        if (held >= 1000 && held < 1100) Serial.println("[LiftCalib] Tahan 2det lagi...");
+        if (held >= 2000 && held < 2100) Serial.println("[LiftCalib] Tahan 1det lagi...");
+        if (held >= 3000 && millis() - debMs > 500) {
+          updateGripperConfigs();
           saveConfigurations();
+          workR = -1.0f; workF = -1.0f;
           robotMode = MODE_NORMAL; debMs = millis(); holdActive = false;
           startGripperWiggle(3);
           Serial.printf("[LiftCalib] EXIT+SAVED\n");
