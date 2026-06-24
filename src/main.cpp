@@ -30,7 +30,7 @@ constexpr float MAX_DRIVE_PERCENT = 75.0f;
 constexpr float MAX_TURN_PERCENT = 55.0f;
 // Yaw correction: HARUS jauh di atas deadband FR=25%.
 // Terlalu kencang -> kurangi. Terlalu lemah -> naikkan. Osilasi -> turunkan KP di struct YawPid.
-constexpr float MAX_YAW_CORRECTION_PERCENT = 65.0f;  // lebih cepat (was 50%)
+constexpr float MAX_YAW_CORRECTION_PERCENT = 75.0f;  // naik 65->75: lebih responsif
 // IDLE_YAW_HOLD: aktifkan agar right stick bisa aim bahkan saat robot diam.
 // Saat idle + right stick arah kanan → robot rotate ke kanan & hold.
 // Deadband 3°: stop koreksi kecil di bawah batas drift IMU.
@@ -39,7 +39,7 @@ constexpr float MAX_YAW_CORRECTION_PERCENT = 65.0f;  // lebih cepat (was 50%)
 constexpr float YAW_HOLD_DEADBAND_DEG      = 2.0f;   // lebih presisi (was 3.0)
 constexpr float YAW_MIN_CORRECTION_PERCENT  = 35.0f;  // snap min: lebih dari deadband motor (was 28)
 constexpr bool  IDLE_YAW_HOLD_ENABLED_DEFAULT = true;
-constexpr float IDLE_YAW_MAX_TURN_PERCENT   = 60.0f;  // sweet spot: 55 too slow, 65 overshoots
+constexpr float IDLE_YAW_MAX_TURN_PERCENT   = 70.0f;  // naik 60->70: lebih responsif
 constexpr bool INVERT_MOVE_X = false;
 constexpr bool INVERT_MOVE_Y = true;
 constexpr bool INVERT_ROTATE = false;
@@ -54,9 +54,9 @@ constexpr bool DRIVE_CLOSED_LOOP_DEFAULT = false;
 constexpr bool RESET_BLUETOOTH_PAIRING_ON_BOOT = false;
 
 struct YawPid {
-  float kp = 1.20f;  // Autotune optimal (was 1.3)
+  float kp = 1.50f;  // naik 1.2->1.5: lebih responsif (KD ikut naik untuk damping)
   float ki = 0.0f;
-  float kd = 0.40f;  // Autotune optimal: 11x lebih kuat = no overshoot (was 0.30)
+  float kd = 0.55f;  // naik 0.40->0.55: damping lebih kuat di speed tinggi
   float integral  = 0.0f;
   float lastError = 0.0f;  // untuk hysteresis ±180° boundary
   uint32_t lastUs = 0;
@@ -88,9 +88,9 @@ bool lastSquareButton = false;
 bool lastStartButton = false;
 
 // ─── Configurable Parameters (NVS Preferences) ──────────────────────────
-float cfg_pid_kp = 1.20f;   // Autotune optimal (KD=0.40 menghilangkan overshoot)
+float cfg_pid_kp = 1.50f;   // KP naik untuk responsivitas
  float cfg_pid_ki = 0.0f;
-float cfg_pid_kd = 0.40f;
+float cfg_pid_kd = 0.55f;   // KD naik proporsional
 
 float cfg_claw_depan_min = AngleClaw_Depan_MIN;
 float cfg_claw_depan_max = AngleClaw_Depan_MAX;
@@ -137,9 +137,9 @@ bool inConfigMode = false;
 
 void loadConfigurations() {
   preferences.begin("robot_cfg", true); // read-only
-  cfg_pid_kp = preferences.getFloat("pid_kp", 1.20f);
+  cfg_pid_kp = preferences.getFloat("pid_kp", 1.50f);
   cfg_pid_ki = preferences.getFloat("pid_ki", 0.0f);
-  cfg_pid_kd = preferences.getFloat("pid_kd", 0.40f);
+  cfg_pid_kd = preferences.getFloat("pid_kd", 0.55f);
 
   cfg_claw_depan_min = preferences.getFloat("claw_f_min", AngleClaw_Depan_MIN);
   cfg_claw_depan_max = preferences.getFloat("claw_f_max", AngleClaw_Depan_MAX);
@@ -588,10 +588,13 @@ void idleYawHoldOrBrake(const ImuTelemetry &imu) {
   const float rawTurn =
       constrain(yawPidUpdate(yawTargetDeg, imu.yawDeg, imu.gyroZ),
                 -IDLE_YAW_MAX_TURN_PERCENT, IDLE_YAW_MAX_TURN_PERCENT);
-  // Motor deadband snap: jika output terlalu lemah untuk gerakkan motor, snap ke minimum.
-  // Tanpa ini: error 10° → output 13% → di bawah deadband motor (25%) → motor tidak bergerak!
-  const float turnCommand = (fabsf(rawTurn) > 0.5f && fabsf(rawTurn) < YAW_MIN_CORRECTION_PERCENT)
-      ? copysignf(YAW_MIN_CORRECTION_PERCENT, rawTurn)
+  // Graduated snap: dekat target (|err|<5deg) jangan snap biar tidak osilasi!
+  // Jauh dari target: snap kuat agar motor pasti bergerak.
+  const float snapMin = (fabsf(errorDeg) < 5.0f)  ? 0.0f               // dekat: bebas
+                      : (fabsf(errorDeg) < 12.0f) ? 25.0f              // medium: snap ringan
+                                                   : YAW_MIN_CORRECTION_PERCENT; // jauh: snap penuh
+  const float turnCommand = (fabsf(rawTurn) > 0.5f && fabsf(rawTurn) < snapMin)
+      ? copysignf(snapMin, rawTurn)
       : rawTurn;
   driveRobot(0.0f, 0.0f, turnCommand);
 }
@@ -1107,9 +1110,13 @@ void processGamepad(ControllerPtr ctl) {
       yawPidUpdate(yawTargetDeg, imu.yawDeg, imu.gyroZ) * speedMultiplier,
       -MAX_YAW_CORRECTION_PERCENT, MAX_YAW_CORRECTION_PERCENT
     );
-    // Motor deadband snap (sama seperti idle path)
-    turnCommand = (fabsf(rawYaw) > 0.5f && fabsf(rawYaw) < YAW_MIN_CORRECTION_PERCENT)
-        ? copysignf(YAW_MIN_CORRECTION_PERCENT, rawYaw)
+    // Graduated snap (sama): dekat target = bebas osilasi, jauh = snap kuat
+    const float errNow = wrap180(yawTargetDeg - imu.yawDeg);
+    const float snapMinDrv = (fabsf(errNow) < 5.0f)  ? 0.0f
+                           : (fabsf(errNow) < 12.0f) ? 25.0f
+                                                      : YAW_MIN_CORRECTION_PERCENT;
+    turnCommand = (fabsf(rawYaw) > 0.5f && fabsf(rawYaw) < snapMinDrv)
+        ? copysignf(snapMinDrv, rawYaw)
         : rawYaw;
   }
 
