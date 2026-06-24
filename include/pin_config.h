@@ -109,7 +109,7 @@
 
 // AngleClaw_Belakang (Servo4, GPIO33) — buka/tutup gripper BELAKANG
 #define AngleClaw_Belakang_MIN  85.0f   // buka / release (tuned)
-#define AngleClaw_Belakang_MAX  118.0f  // tutup / gripping (tuned, anti-stall)
+#define AngleClaw_Belakang_MAX  108.0f  // tutup / gripping (samain depan)
 
 // AngleLifter_Depan  (Servo1, GPIO12) — naik/turun lifter DEPAN
 #define AngleLifter_Depan_MIN   30.0f   // naik / angkat (diubah dari 0.0f agar agak kebawah)
