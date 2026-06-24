@@ -833,45 +833,36 @@ void processGamepad(ControllerPtr ctl) {
   float slowRotateTurn  = 0.0f;
 
   // ─── Claw Calibration Mode via Gamepad ────────────────────────────────────
-  // Toggle: tekan L3 (stick kiri klik)
+  // Toggle: tahan Triangle+Share 3 detik
   // L1 tahan = belakang open +1°  |  L2 tahan = belakang open -1°
   // R1 tahan = depan    open +1°  |  R2 tahan = depan    open -1°
-  // Share (kotak kiri) = save & keluar
+  // Share (lagi) = save & keluar
   {
     static bool     clawCalibMode = false;
-    static uint32_t debL3         = 0;
+    static uint32_t debMs         = 0;
     static uint32_t tickMs        = 0;
     static uint32_t printMs       = 0;
 
     const bool hasCtl  = ctl && ctl->isConnected();
-    // Square (x) + Circle (b) ditahan 3 detik — face buttons, aman tidak gerak robot
-    const bool calibBtn = hasCtl && ctl->x() && ctl->b();
+    // Triangle (y) + Share (miscSelect) — aman, tidak konflik dengan gerak robot
+    const bool calibBtn = hasCtl && ctl->y() && ctl->miscSelect();
 
-    // Toggle: tahan Square+Circle selama 3 detik
+    // Toggle: tahan Triangle+Share selama 3 detik
     static uint32_t holdStartMs = 0;
     static bool     holdActive  = false;
-    if (calibBtn) {
+    if (calibBtn && !clawCalibMode) {
       if (!holdActive) { holdActive = true; holdStartMs = millis(); }
       uint32_t held = millis() - holdStartMs;
-      // Feedback serial tiap detik
-      if (held >= 1000 && held < 1050) Serial.println("[ClawCalib] Tahan L3+R3... 2 detik lagi");
-      if (held >= 2000 && held < 2050) Serial.println("[ClawCalib] Tahan L3+R3... 1 detik lagi");
-      if (held >= 3000 && millis() - debL3 > 500) {
-        clawCalibMode = !clawCalibMode; debL3 = millis(); holdActive = false;
-        if (clawCalibMode) {
-          startGripperWiggle(2);  // 2 wiggle = masuk claw calib
-          Serial.println("[ClawCalib] MODE ON!");
-          Serial.println("  L1=R-open++ | L2=R-open-- | R1=F-open++ | R2=F-open--");
-          Serial.println("  Share=save | L3+R3 3det=keluar");
-        } else {
-          saveConfigurations();
-          startGripperWiggle(3);  // 3 wiggle = keluar claw calib
-          Serial.printf("[ClawCalib] OFF (saved) F:%.0f->%.0f R:%.0f->%.0f\n",
-                        cfg_claw_depan_min, cfg_claw_depan_max,
-                        cfg_claw_belakang_min, cfg_claw_belakang_max);
-        }
+      if (held >= 1000 && held < 1100) Serial.println("[ClawCalib] Tahan Triangle+Share... 2 detik lagi");
+      if (held >= 2000 && held < 2100) Serial.println("[ClawCalib] Tahan Triangle+Share... 1 detik lagi");
+      if (held >= 3000 && millis() - debMs > 500) {
+        clawCalibMode = true; debMs = millis(); holdActive = false;
+        startGripperWiggle(2);
+        Serial.println("[ClawCalib] MODE ON!");
+        Serial.println("  L1=R-open++ | L2=R-open-- | R1=F-open++ | R2=F-open--");
+        Serial.println("  Share=save&keluar | Triangle+Share 3det=keluar");
       }
-    } else {
+    } else if (!calibBtn) {
       holdActive = false;
     }
 
@@ -883,12 +874,17 @@ void processGamepad(ControllerPtr ctl) {
 
       // Tick 100ms: tambah/kurang 1 derajat
       if (millis() - tickMs > 100) {
-        bool changed = false;
-        if (l1b)       { cfg_claw_belakang_min = constrain(cfg_claw_belakang_min - 1.0f, 0.0f, 179.0f); gripperRear.setClaw(false);  changed = true; }
-        if (tL2 > 0.3f){ cfg_claw_belakang_min = constrain(cfg_claw_belakang_min + 1.0f, 1.0f, 180.0f); gripperRear.setClaw(false);  changed = true; }
-        if (r1b)       { cfg_claw_depan_min    = constrain(cfg_claw_depan_min    - 1.0f, 0.0f, 179.0f); gripperFront.setClaw(false); changed = true; }
-        if (tR2 > 0.3f){ cfg_claw_depan_min    = constrain(cfg_claw_depan_min    + 1.0f, 1.0f, 180.0f); gripperFront.setClaw(false); changed = true; }
-        if (changed) { updateGripperConfigs(); tickMs = millis(); }
+        bool changedR = false, changedF = false;
+        if (l1b)        { cfg_claw_belakang_min = constrain(cfg_claw_belakang_min - 1.0f, 0.0f, 175.0f); changedR = true; }
+        if (tL2 > 0.3f) { cfg_claw_belakang_min = constrain(cfg_claw_belakang_min + 1.0f, 1.0f, 180.0f); changedR = true; }
+        if (r1b)        { cfg_claw_depan_min    = constrain(cfg_claw_depan_min    - 1.0f, 0.0f, 175.0f); changedF = true; }
+        if (tR2 > 0.3f) { cfg_claw_depan_min    = constrain(cfg_claw_depan_min    + 1.0f, 1.0f, 180.0f); changedF = true; }
+        if (changedR || changedF) {
+          updateGripperConfigs();        // ← update dulu baru setClaw!
+          tickMs = millis();
+          if (changedR) gripperRear.setClaw(false);   // servo gerak ke angle BARU
+          if (changedF) gripperFront.setClaw(false);
+        }
       }
 
       // Print tiap 300ms
@@ -898,16 +894,31 @@ void processGamepad(ControllerPtr ctl) {
                       cfg_claw_depan_min, cfg_claw_belakang_min);
       }
 
-      // Share = save & keluar
-      if (ctl->miscSelect() && millis() - debL3 > 500) {
-        saveConfigurations(); clawCalibMode = false; debL3 = millis();
-        startGripperWiggle(3);  // 3 wiggle = save & keluar
+      // Share = save & keluar (tapi bukan saat calibBtn aktif = Triangle+Share toggling)
+      if (ctl->miscSelect() && !ctl->y() && millis() - debMs > 500) {
+        saveConfigurations(); clawCalibMode = false; debMs = millis();
+        startGripperWiggle(3);
         Serial.printf("[ClawCalib] SAVED! F:%.0f->%.0f R:%.0f->%.0f\n",
                       cfg_claw_depan_min, cfg_claw_depan_max,
                       cfg_claw_belakang_min, cfg_claw_belakang_max);
       }
 
-      stopWithBrake(); return;  // Motor stop saat calib mode
+      // Triangle+Share 3det juga bisa keluar
+      if (calibBtn) {
+        if (!holdActive) { holdActive = true; holdStartMs = millis(); }
+        uint32_t held = millis() - holdStartMs;
+        if (held >= 1000 && held < 1100) Serial.println("[ClawCalib] Tahan 2 detik lagi untuk keluar...");
+        if (held >= 2000 && held < 2100) Serial.println("[ClawCalib] Tahan 1 detik lagi untuk keluar...");
+        if (held >= 3000 && millis() - debMs > 500) {
+          saveConfigurations(); clawCalibMode = false; debMs = millis(); holdActive = false;
+          startGripperWiggle(3);
+          Serial.printf("[ClawCalib] OFF+SAVED F:%.0f->%.0f R:%.0f->%.0f\n",
+                        cfg_claw_depan_min, cfg_claw_depan_max,
+                        cfg_claw_belakang_min, cfg_claw_belakang_max);
+        }
+      }
+
+      stopWithBrake(); return;
     }
   }
 
