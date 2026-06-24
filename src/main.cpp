@@ -25,7 +25,7 @@ constexpr int STICK_MAX = 512;
 constexpr float DPAD_MOVE_PERCENT = 40.0f;           // D-pad speed
 // Speed: open-loop, 55% PWM langsung ke ZK-5AD. Deadband FL=20%, FR=25%.
 // 55% = cukup cepat tanpa terlalu agresif. Kalau terlalu cepat, turunkan ke 45%.
-constexpr float MAX_DRIVE_PERCENT = 67.0f;
+constexpr float MAX_DRIVE_PERCENT = 80.0f;
 // Max rotasi manual (stick kanan di headingControlMode=false)
 constexpr float MAX_TURN_PERCENT = 20.0f;
 // Yaw correction: HARUS jauh di atas deadband FR=25%.
@@ -612,8 +612,9 @@ int16_t percentToRawCommand(float percent) {
 void driveRobotRawPercent(float x, float y, float turn) {
   SpeedController().setEnabled(false);
   const WheelCommand mix = MixOmni4(percentToRawCommand(x), percentToRawCommand(y), percentToRawCommand(turn));
-  // Kompensasi RPM mismatch: front=1260RPM, rear=2815RPM → scale rear supaya linear speed sama
-  constexpr float REAR_SCALE = MAX_WHEEL_RPM_FRONT / MAX_WHEEL_RPM_REAR;  // ≈ 0.447
+  // REAR_SCALE: sementara 1.0 - yaw PID handle drift saat di lantai
+  // (scale 0.447 buat rear di bawah deadband saat nahan berat robot)
+  constexpr float REAR_SCALE = 1.0f;
   DriveAll(mix.fl, mix.fr,
            static_cast<int16_t>(mix.rl * REAR_SCALE),
            static_cast<int16_t>(mix.rr * REAR_SCALE));
@@ -1427,10 +1428,10 @@ void processGamepad(ControllerPtr ctl) {
   }
 
   // ── Hill Assist: boost otomatis saat nanjak (pitch positif = depan naik) ──
-  // Kick in di 5°, full boost di 25°, max +30% extra power
-  constexpr float HILL_PITCH_START = 5.0f;
-  constexpr float HILL_PITCH_FULL  = 25.0f;
-  constexpr float HILL_MAX_BOOST   = 0.30f;  // +30% max saat full tanjakan
+  // Kick in di 3°, full boost di 15°, max +50% → 67%*1.5=100% full power saat nanjak
+  constexpr float HILL_PITCH_START = 3.0f;
+  constexpr float HILL_PITCH_FULL  = 15.0f;
+  constexpr float HILL_MAX_BOOST   = 0.50f;  // +50% max → cap ke 100% motor power
   {
     const float pitch = imu.ready ? imu.pitchDeg : 0.0f;
     const float moveMag = sqrtf(moveX*moveX + moveY*moveY); // 0-100 range
