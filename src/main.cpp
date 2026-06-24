@@ -614,9 +614,9 @@ int16_t percentToRawCommand(float percent) {
 void driveRobotRawPercent(float x, float y, float turn) {
   SpeedController().setEnabled(false);
   const WheelCommand mix = MixOmni4(percentToRawCommand(x), percentToRawCommand(y), percentToRawCommand(turn));
-  // Scale rear: front=680RPM, rear=2500RPM → rear 3.6x lebih kuat di PWM sama → HARUS discale!
-  // 0.447 = 1260/2815 (rasio max RPM). Di MAX_DRIVE=80%: rear dapat 35.7% duty (>22.9% deadband ✓)
-  constexpr float REAR_SCALE = MAX_WHEEL_RPM_FRONT / MAX_WHEEL_RPM_REAR;  // ≈ 0.447
+  // Scale rear: 0.55 (lebih dari rasio RPM 0.447) utk kompensasi load deadband rear yg lebih tinggi
+  // Yaw PID handle residual drift. 0.447 terlalu lemah under load (rear trailing).
+  constexpr float REAR_SCALE = 0.55f;
   DriveAll(mix.fl, mix.fr,
            static_cast<int16_t>(mix.rl * REAR_SCALE),
            static_cast<int16_t>(mix.rr * REAR_SCALE));
@@ -1431,9 +1431,9 @@ void processGamepad(ControllerPtr ctl) {
 
   // ── Hill Assist: boost otomatis saat nanjak (pitch positif = depan naik) ──
   // Kick in di 3°, full boost di 15°, max +50% → 67%*1.5=100% full power saat nanjak
-  constexpr float HILL_PITCH_START = 3.0f;
-  constexpr float HILL_PITCH_FULL  = 15.0f;
-  constexpr float HILL_MAX_BOOST   = 0.50f;  // +50% max → cap ke 100% motor power
+  constexpr float HILL_PITCH_START = 5.0f;
+  constexpr float HILL_PITCH_FULL  = 25.0f;
+  constexpr float HILL_MAX_BOOST   = 0.30f;  // +30% max saat full tanjakan
   {
     const float pitch = imu.ready ? imu.pitchDeg : 0.0f;
     const float moveMag = sqrtf(moveX*moveX + moveY*moveY); // 0-100 range
@@ -2006,7 +2006,8 @@ void onConnectedController(ControllerPtr ctl) {
   }
 
   activeController = ctl;
-  yawTargetDeg = Imu().telemetry().yawDeg;
+  // JANGAN reset yawTargetDeg di sini - preserve angle lock saat BT reconnect!
+  // yawTargetDeg = Imu().telemetry().yawDeg;  ← ini yang bikin angle lock mati saat reconnect
   yawPid.reset();
   Serial.println("Controller accepted.");
 }
