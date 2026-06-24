@@ -1123,26 +1123,17 @@ void processGamepad(ControllerPtr ctl) {
     const bool l2 = triggerL2 > 0.1f;
     const bool r2 = triggerR2 > 0.1f;
 
-    // ── Slow rotate modifier: lifter trigger + bumper/trigger ─────────────
-    // R2 held (front lifter) : L1 = kiri (CCW), L2 = kanan (CW)
-    // L2 held (rear lifter)  : R1 = kanan (CW), R2 = kiri (CCW)  <- sebaliknya/mirror
-    constexpr float SLOW_ROT = 35.0f;
-    if (triggerR2 > 0.3f && triggerL2 <= 0.3f) {
-      // R2 ONLY modifier
-      if (l1) { slowRotateActive=true; slowRotateTurn=-SLOW_ROT; }       // kiri
-      else if (l2) { slowRotateActive=true; slowRotateTurn=+SLOW_ROT; }  // kanan
-    } else if (triggerL2 > 0.3f && triggerR2 <= 0.3f) {
-      // L2 ONLY modifier (sebaliknya)
-      if (r1) { slowRotateActive=true; slowRotateTurn=+SLOW_ROT; }       // kanan
-      else if (r2) { slowRotateActive=true; slowRotateTurn=-SLOW_ROT; }  // kiri
-    } else if (triggerR2 > 0.3f && triggerL2 > 0.3f) {
-      // Kedua trigger: R2 modifier, L2 side controls rotation
-      if (l1) { slowRotateActive=true; slowRotateTurn=-SLOW_ROT; }  // kiri
-      else     { slowRotateActive=true; slowRotateTurn=+SLOW_ROT; } // kanan
+    // ── Slow rotate: tahan L2 atau R2 + tekan R1/L1 bumper ────────────────
+    // L2/R2 (trigger apapun) + R1 = rotate KANAN (+)
+    // L2/R2 (trigger apapun) + L1 = rotate KIRI  (-)
+    constexpr float SLOW_ROT = 65.0f;
+    const bool anyTrigger = (triggerL2 > 0.3f || triggerR2 > 0.3f);
+    if (anyTrigger) {
+      if (r1 && !l1) { slowRotateActive = true; slowRotateTurn = +SLOW_ROT; }
+      else if (l1 && !r1) { slowRotateActive = true; slowRotateTurn = -SLOW_ROT; }
     }
 
-
-    // Jika tidak ada stik terhubung (termasuk saat awal menyala), paksa claw tutup dan lifter naik
+    // Jika tidak ada stik terhubung, paksa claw tutup
     if (ctl == nullptr || !ctl->isConnected()) {
       if (!gripperFront.isClawClosed()) {
         gripperFront.setClaw(true);
@@ -1171,8 +1162,8 @@ void processGamepad(ControllerPtr ctl) {
     // Target awal berdasarkan trigger stik (UP = 1.0f, DOWN = 0.0f)
     // R2 = lifter depan, L2 = lifter belakang (ditukar dari sebelumnya)
     // Jika slow rotate aktif dan L2 dipakai untuk rotasi, rear lifter tetap naik
-    float targetFront = ctl && ctl->isConnected() ? (1.0f - triggerR2) : 1.0f;
-    float targetRear  = ctl && ctl->isConnected() ? (1.0f - triggerL2) : 1.0f;  // L2 selalu turunkan rear lifter
+    float targetFront = ctl && ctl->isConnected() && !slowRotateActive ? (1.0f - triggerR2) : 1.0f;
+    float targetRear  = ctl && ctl->isConnected() ? (1.0f - triggerL2) : 1.0f;
 
     // Membaca kemiringan (pitch & roll) dari MPU6050
     const ImuTelemetry imu = Imu().telemetry();
