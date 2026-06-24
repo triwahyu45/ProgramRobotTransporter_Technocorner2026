@@ -874,63 +874,56 @@ void processGamepad(ControllerPtr ctl) {
 
     // ── Dalam mode MODE_CALIB_CLAW ────────────────────────────────────────
     if (robotMode == MODE_CALIB_CLAW && hasCtl) {
-      const bool  l1b  = ctl->l1();                         // rear open ++
-      const bool  r1b  = ctl->r1();                         // front open ++
-      const float tL2  = (float)ctl->brake()    / 1023.0f; // rear close ++
-      const float tR2  = (float)ctl->throttle() / 1023.0f; // front close ++
-      const bool  xBtn = ctl->a();                          // X = save buka
-      const bool  oBtn = ctl->b();                          // O = save tutup
+      const bool  l1b  = ctl->l1();                          // rear open++ (buka)
+      const bool  r1b  = ctl->r1();                          // front open++
+      const float tL2  = (float)ctl->brake()    / 1023.0f;  // rear open-- (sempit)
+      const float tR2  = (float)ctl->throttle() / 1023.0f;  // front open--
+      const bool  xBtn = ctl->a();                           // X = save servo terakhir
+      const bool  oBtn = ctl->b();                           // O = save servo terakhir
 
-      // Tick 100ms: adjust 1 derajat per tick
+      static uint8_t lastServo = 0; // 0=none 1=belakang 2=depan
+
+      // Tick 100ms: +/- 1 derajat open angle
       if (millis() - tickMs > 100) {
         bool changedR = false, changedF = false;
-        // Bumper = open angle (lebih buka = angle turun)
-        if (l1b)        { cfg_claw_belakang_min = constrain(cfg_claw_belakang_min - 1.0f, 0.0f, 175.0f); changedR = true; }
-        if (r1b)        { cfg_claw_depan_min    = constrain(cfg_claw_depan_min    - 1.0f, 0.0f, 175.0f); changedF = true; }
-        // Trigger = close angle (lebih nutup = angle naik)
-        if (tL2 > 0.3f) { cfg_claw_belakang_max = constrain(cfg_claw_belakang_max + 1.0f, 1.0f, 180.0f); changedR = true; }
-        if (tR2 > 0.3f) { cfg_claw_depan_max    = constrain(cfg_claw_depan_max    + 1.0f, 1.0f, 180.0f); changedF = true; }
+        if (l1b)        { cfg_claw_belakang_min = constrain(cfg_claw_belakang_min - 1.0f, 0.0f, 175.0f); changedR = true; lastServo = 1; }
+        if (tL2 > 0.3f) { cfg_claw_belakang_min = constrain(cfg_claw_belakang_min + 1.0f, 1.0f, 180.0f); changedR = true; lastServo = 1; }
+        if (r1b)        { cfg_claw_depan_min    = constrain(cfg_claw_depan_min    - 1.0f, 0.0f, 175.0f); changedF = true; lastServo = 2; }
+        if (tR2 > 0.3f) { cfg_claw_depan_min    = constrain(cfg_claw_depan_min    + 1.0f, 1.0f, 180.0f); changedF = true; lastServo = 2; }
         if (changedR || changedF) {
           updateGripperConfigs();
           tickMs = millis();
-          // Gerakin servo ke posisi yang sedang diedit
-          if (l1b || tL2 > 0.3f) gripperRear.setClaw(l1b ? false : true);
-          if (r1b || tR2 > 0.3f) gripperFront.setClaw(r1b ? false : true);
+          if (changedR) gripperRear.setClaw(false);
+          if (changedF) gripperFront.setClaw(false);
         }
       }
 
-      // X = save posisi BUKA ke NVS
-      static bool lastX = false;
-      if (xBtn && !lastX) {
+      // X atau O = save servo yang terakhir diubah (simpan min+max ke NVS)
+      static bool lastXO = false;
+      const bool xoBtn = xBtn || oBtn;
+      if (xoBtn && !lastXO && lastServo != 0) {
         preferences.begin("config", false);
-        preferences.putFloat("claw_dep_min",  cfg_claw_depan_min);
-        preferences.putFloat("claw_bel_min",  cfg_claw_belakang_min);
+        if (lastServo == 1) {
+          preferences.putFloat("claw_bel_min", cfg_claw_belakang_min);
+          preferences.putFloat("claw_bel_max", cfg_claw_belakang_max);
+          Serial.printf("[ClawCalib] Belakang saved: open=%.0f close=%.0f\n",
+                        cfg_claw_belakang_min, cfg_claw_belakang_max);
+        } else {
+          preferences.putFloat("claw_dep_min", cfg_claw_depan_min);
+          preferences.putFloat("claw_dep_max", cfg_claw_depan_max);
+          Serial.printf("[ClawCalib] Depan saved: open=%.0f close=%.0f\n",
+                        cfg_claw_depan_min, cfg_claw_depan_max);
+        }
         preferences.end();
-        gripperFront.setClaw(false); gripperRear.setClaw(false); // show open
-        Serial.printf("[ClawCalib] SAVED BUKA: F-open=%.0f R-open=%.0f\n",
-                      cfg_claw_depan_min, cfg_claw_belakang_min);
       }
-      lastX = xBtn;
-
-      // O = save posisi TUTUP ke NVS
-      static bool lastO = false;
-      if (oBtn && !lastO) {
-        preferences.begin("config", false);
-        preferences.putFloat("claw_dep_max",  cfg_claw_depan_max);
-        preferences.putFloat("claw_bel_max",  cfg_claw_belakang_max);
-        preferences.end();
-        gripperFront.setClaw(true); gripperRear.setClaw(true); // show close
-        Serial.printf("[ClawCalib] SAVED TUTUP: F-close=%.0f R-close=%.0f\n",
-                      cfg_claw_depan_max, cfg_claw_belakang_max);
-      }
-      lastO = oBtn;
+      lastXO = xoBtn;
 
       // Print status tiap 300ms
       if (millis() - printMs > 300) {
         printMs = millis();
-        Serial.printf("[ClawCalib] F: o=%.0f c=%.0f | R: o=%.0f c=%.0f\n",
-                      cfg_claw_depan_min, cfg_claw_depan_max,
-                      cfg_claw_belakang_min, cfg_claw_belakang_max);
+        Serial.printf("[ClawCalib] [%s] F-open=%.0f R-open=%.0f\n",
+                      lastServo==1?"R*":lastServo==2?"F*":"--",
+                      cfg_claw_depan_min, cfg_claw_belakang_min);
       }
 
       // Share (tanpa Triangle) = save semua & keluar
@@ -961,6 +954,7 @@ void processGamepad(ControllerPtr ctl) {
 
       stopWithBrake(); return;
     }
+
   }
 
 
@@ -1015,14 +1009,14 @@ void processGamepad(ControllerPtr ctl) {
       // (setLifter diserahkan ke logika dinamis di bawah)
     }
 
-    // R1: toggle claw depan — SKIP jika sedang hold calib combo atau slow rotate
-    if (r1 && !lastR1 && !calibCombo && !slowRotateActive) {
+    // R1: toggle claw depan — SKIP jika sedang calib mode atau slow rotate
+    if (r1 && !lastR1 && !calibCombo && !slowRotateActive && robotMode == MODE_NORMAL) {
       gripperFront.toggleClaw();
       Serial.printf("[Gripper] Depan claw: %s\n",
                     gripperFront.isClawClosed() ? "CLOSE" : "OPEN");
     }
-    // L1: toggle claw belakang — SKIP jika sedang hold calib combo atau slow rotate
-    if (l1 && !lastL1 && !calibCombo && !slowRotateActive) {
+    // L1: toggle claw belakang — SKIP jika sedang calib mode atau slow rotate
+    if (l1 && !lastL1 && !calibCombo && !slowRotateActive && robotMode == MODE_NORMAL) {
       gripperRear.toggleClaw();
       Serial.printf("[Gripper] Belakang claw: %s\n",
                     gripperRear.isClawClosed() ? "CLOSE" : "OPEN");
