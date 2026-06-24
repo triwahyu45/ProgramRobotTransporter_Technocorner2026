@@ -33,9 +33,11 @@ constexpr float MAX_TURN_PERCENT = 55.0f;
 constexpr float MAX_YAW_CORRECTION_PERCENT = 50.0f;
 // IDLE_YAW_HOLD: aktifkan agar right stick bisa aim bahkan saat robot diam.
 // Saat idle + right stick arah kanan → robot rotate ke kanan & hold.
-// Deadband 5°: stop koreksi kecil yang tidak bisa diaktuasi motor (batas fisik deadband motor ~17°).
-constexpr bool IDLE_YAW_HOLD_ENABLED_DEFAULT = true;
-constexpr float YAW_HOLD_DEADBAND_DEG = 5.0f;
+// Deadband 3°: stop koreksi kecil di bawah batas drift IMU.
+// YAW_MIN_CORRECTION: snap output ke minimum ini agar motor PASTI bergerak (motor deadband ~25%).
+// Efek: robot hold heading kuat, error >3° selalu dikoreksi dengan MINIMUM 28% power.
+constexpr float YAW_HOLD_DEADBAND_DEG    = 3.0f;
+constexpr float YAW_MIN_CORRECTION_PERCENT = 28.0f;  // just above FR motor deadband (25%)
 constexpr float IDLE_YAW_MAX_TURN_PERCENT = 50.0f;
 constexpr bool INVERT_MOVE_X = false;
 constexpr bool INVERT_MOVE_Y = true;
@@ -581,9 +583,14 @@ void idleYawHoldOrBrake(const ImuTelemetry &imu) {
     return;
   }
 
-  const float turnCommand =
+  const float rawTurn =
       constrain(yawPidUpdate(yawTargetDeg, imu.yawDeg, imu.gyroZ),
                 -IDLE_YAW_MAX_TURN_PERCENT, IDLE_YAW_MAX_TURN_PERCENT);
+  // Motor deadband snap: jika output terlalu lemah untuk gerakkan motor, snap ke minimum.
+  // Tanpa ini: error 10° → output 13% → di bawah deadband motor (25%) → motor tidak bergerak!
+  const float turnCommand = (fabsf(rawTurn) > 0.5f && fabsf(rawTurn) < YAW_MIN_CORRECTION_PERCENT)
+      ? copysignf(YAW_MIN_CORRECTION_PERCENT, rawTurn)
+      : rawTurn;
   driveRobot(0.0f, 0.0f, turnCommand);
 }
 
@@ -710,6 +717,23 @@ void processGamepad(ControllerPtr ctl) {
     }
   } else {
     imuCalibTriggerStartMs = 0;
+  }
+
+  // ─── BT Re-pair Restart (L1 + R1 + L3 + R3 tahan 2 detik) ───
+  // Aman: butuh 4 tombol sekaligus + tahan 2 detik, tidak mungkin keinjak tidak sengaja.
+  static uint32_t btRestartTriggerMs = 0;
+  if (ctl && ctl->isConnected() && ctl->l1() && ctl->r1() && ctl->thumbL() && ctl->thumbR()) {
+    if (btRestartTriggerMs == 0) {
+      btRestartTriggerMs = millis();
+      Serial.println("[System] L1+R1+L3+R3 ditekan. Tahan 2 detik untuk restart BT re-pair...");
+    } else if (millis() - btRestartTriggerMs > 2000) {
+      Serial.println("[System] Restarting ESP32 untuk BT re-pair...");
+      stopWithBrake();
+      delay(300);
+      ESP.restart();
+    }
+  } else {
+    btRestartTriggerMs = 0;
   }
 
   // ─── Gripper diupdate SELALU, bahkan saat calibrating / disconnect ───
@@ -991,10 +1015,14 @@ void processGamepad(ControllerPtr ctl) {
       lastManualTurn = false;
     }
     // Clamp yaw PID output agar tidak spin terlalu kencang saat angle lock
-    turnCommand = constrain(
+    const float rawYaw = constrain(
       yawPidUpdate(yawTargetDeg, imu.yawDeg, imu.gyroZ) * speedMultiplier,
       -MAX_YAW_CORRECTION_PERCENT, MAX_YAW_CORRECTION_PERCENT
     );
+    // Motor deadband snap (sama seperti idle path)
+    turnCommand = (fabsf(rawYaw) > 0.5f && fabsf(rawYaw) < YAW_MIN_CORRECTION_PERCENT)
+        ? copysignf(YAW_MIN_CORRECTION_PERCENT, rawYaw)
+        : rawYaw;
   }
 
   driveRobot(xCommand, yCommand, turnCommand);
@@ -1295,6 +1323,34 @@ void handleCommand(String line) {
     } else {
       Serial.println("Usage: mode config | mode comp");
     }
+  } else if (cmd.name == "restart" || cmd.name == "rst") {
+    Serial.println("[System] Restarting ESP32 for BT re-pair...");
+    delay(300);
+    ESP.restart();
+  } else if (cmd.name == "heading") {
+    // heading <deg> - set target heading dari serial, aktifkan yaw hold
+    if (cmd.args.size() > 0) {
+      yawTargetDeg = argOr(cmd, 0, yawTargetDeg);
+      yawHoldEnabled = true;
+      idleYawHoldEnabled = true;
+      yawPid.reset();
+      Serial.print("[Heading] Target set to ");
+      Serial.print(yawTargetDeg, 1);
+      Serial.print(" deg (current yaw=");
+      Serial.print(Imu().telemetry().yawDeg, 1);
+      Serial.println(" deg)");
+    } else {
+      Serial.print("[Heading] target=");
+      Serial.print(yawTargetDeg, 1);
+      Serial.print(" yaw=");
+      Serial.println(Imu().telemetry().yawDeg, 1);
+    }
+  } else if (cmd.name == "tare") {
+    // tare - set target ke yaw sekarang (sama dengan tekan X button)
+    yawTargetDeg = Imu().telemetry().yawDeg;
+    yawPid.reset();
+    Serial.print("[Tare] Target reset to current yaw=");
+    Serial.println(yawTargetDeg, 1);
   } else {
     Serial.print("Unknown command: ");
     Serial.println(cmd.name);
