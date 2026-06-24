@@ -1123,15 +1123,12 @@ void processGamepad(ControllerPtr ctl) {
     const bool l2 = triggerL2 > 0.1f;
     const bool r2 = triggerR2 > 0.1f;
 
-    // ── Slow rotate: tahan L2 atau R2 + tekan R1/L1 bumper ────────────────
-    // L2/R2 (trigger apapun) + R1 = rotate KANAN (+)
-    // L2/R2 (trigger apapun) + L1 = rotate KIRI  (-)
-    constexpr float SLOW_ROT = 65.0f;
-    const bool anyTrigger = (triggerL2 > 0.3f || triggerR2 > 0.3f);
-    if (anyTrigger) {
-      if (r1 && !l1) { slowRotateActive = true; slowRotateTurn = +SLOW_ROT; }
-      else if (l1 && !r1) { slowRotateActive = true; slowRotateTurn = -SLOW_ROT; }
-    }
+    // ── Slow rotate: trigger + bumper BERLAWANAN sisi = rotate ──────────────
+    // L2 (rear) + R1 = rotate KANAN  |  R2 (front) + L1 = rotate KIRI
+    // L2 (rear) + L1 = rear gripper  |  R2 (front) + R1 = front gripper
+    constexpr float SLOW_ROT = 45.0f;
+    if (triggerL2 > 0.3f && !l1 && r1) { slowRotateActive = true; slowRotateTurn = +SLOW_ROT; }  // L2+R1 = kanan
+    else if (triggerR2 > 0.3f && !r1 && l1) { slowRotateActive = true; slowRotateTurn = -SLOW_ROT; } // R2+L1 = kiri
 
     // Jika tidak ada stik terhubung, paksa claw tutup
     if (ctl == nullptr || !ctl->isConnected()) {
@@ -1162,7 +1159,7 @@ void processGamepad(ControllerPtr ctl) {
     // Target awal berdasarkan trigger stik (UP = 1.0f, DOWN = 0.0f)
     // R2 = lifter depan, L2 = lifter belakang (ditukar dari sebelumnya)
     // Jika slow rotate aktif dan L2 dipakai untuk rotasi, rear lifter tetap naik
-    float targetFront = ctl && ctl->isConnected() && !slowRotateActive ? (1.0f - triggerR2) : 1.0f;
+    float targetFront = ctl && ctl->isConnected() ? (1.0f - triggerR2) : 1.0f;
     float targetRear  = ctl && ctl->isConnected() ? (1.0f - triggerL2) : 1.0f;
 
     // Membaca kemiringan (pitch & roll) dari MPU6050
