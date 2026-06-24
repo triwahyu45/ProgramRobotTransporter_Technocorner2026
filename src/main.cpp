@@ -905,7 +905,7 @@ void processGamepad(ControllerPtr ctl) {
             lastRepeat = now;
           } else if (cur && prev) {    // masih ditahan
             if (now - holdStart >= 1000 &&        // sudah 1det
-                now - lastRepeat  >= 300) {        // repeat interval 300ms
+                now - lastRepeat  >= 100) {        // repeat interval 100ms
               fire = true;
               lastRepeat = now;
             }
@@ -1043,7 +1043,7 @@ void processGamepad(ControllerPtr ctl) {
         bool tick(bool cur, uint32_t now) {
           bool fire=false;
           if (cur && !prev)          { fire=true; holdStart=lastRepeat=now; }
-          else if (cur && prev && now-holdStart>=1000 && now-lastRepeat>=300) { fire=true; lastRepeat=now; }
+          else if (cur && prev && now-holdStart>=1000 && now-lastRepeat>=100) { fire=true; lastRepeat=now; }
           prev=cur; return fire;
         }
       };
