@@ -26,9 +26,9 @@ constexpr float DPAD_MOVE_PERCENT = 40.0f;           // D-pad speed
 constexpr float MAX_DRIVE_PERCENT = 40.0f;           // 40% × 80 RPM = 32 RPM target, FL mampu (max 55)
 constexpr float MAX_TURN_PERCENT = 25.0f;            // Max rotasi manual
 constexpr float MAX_YAW_CORRECTION_PERCENT = 15.0f; // Max koreksi angle lock (yaw PID)
-constexpr bool IDLE_YAW_HOLD_ENABLED_DEFAULT = true;
-constexpr float YAW_HOLD_DEADBAND_DEG = 2.0f;
-constexpr float IDLE_YAW_MAX_TURN_PERCENT = 18.0f;
+constexpr bool IDLE_YAW_HOLD_ENABLED_DEFAULT = false;  // disable dulu: IMU drift bikin motor jalan sendiri
+constexpr float YAW_HOLD_DEADBAND_DEG = 3.0f;           // deadband lebih besar biar gak sensitif
+constexpr float IDLE_YAW_MAX_TURN_PERCENT = 12.0f;      // turunkan dari 18% biar di bawah deadband FL
 constexpr bool INVERT_MOVE_X = false;
 constexpr bool INVERT_MOVE_Y = true;
 constexpr bool INVERT_ROTATE = false;
