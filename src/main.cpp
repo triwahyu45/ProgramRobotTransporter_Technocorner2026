@@ -130,6 +130,7 @@ bool lastR1 = false;
 bool lastR2 = false;
 bool wheelTestActive = false;  // true saat mode test arah roda aktif (tahan Triangle)
 bool calibLockActive = false;  // true = semua kontrol dikunci saat kalibrasi IMU aktif
+bool safeOverride    = false;  // true = bypass safe mode untuk testing tanpa stick
 
 Preferences preferences;
 WebServer server(80);
@@ -1409,6 +1410,38 @@ void handleCommand(String line) {
     SetWheelTargetRpm(argOr(cmd, 0, 0), argOr(cmd, 1, 0), argOr(cmd, 2, 0), argOr(cmd, 3, 0));
   } else if (cmd.name == "raw" || cmd.name == "rawall") {
     handleRawCommand(cmd);
+  } else if (cmd.name == "override") {
+    // override on/off - bypass safe mode untuk test motor tanpa stick
+    if (line.endsWith(" on")) {
+      safeOverride = true;
+      Serial.println("[Override] SAFE MODE BYPASSED - motor bisa gerak tanpa stick!");
+      Serial.println("[Override] Ketik 'override off' untuk kembali ke safe mode.");
+    } else if (line.endsWith(" off")) {
+      safeOverride = false;
+      stopWithBrake();
+      Serial.println("[Override] Safe mode AKTIF kembali - motor OFF.");
+    } else {
+      Serial.printf("[Override] Status: %s\n", safeOverride ? "ON (bypass)" : "OFF (safe mode aktif)");
+    }
+  } else if (cmd.name == "i2c") {
+    // I2C scan - cek PCA9685 dan device lain
+    Serial.println("[I2C] Scanning 0x01-0x7F...");
+    Wire.begin();
+    uint8_t found = 0;
+    for (uint8_t addr = 1; addr < 127; addr++) {
+      Wire.beginTransmission(addr);
+      uint8_t err = Wire.endTransmission();
+      if (err == 0) {
+        Serial.printf("  [I2C] Device at 0x%02X", addr);
+        if (addr == 0x40) Serial.print(" <- PCA9685 MOTOR DRIVER");
+        if (addr == 0x41) Serial.print(" <- PCA9685 (alt addr)");
+        if (addr == 0x68 || addr == 0x69) Serial.print(" <- MPU6050 IMU");
+        Serial.println();
+        found++;
+      }
+    }
+    if (found == 0) Serial.println("  [I2C] TIDAK ADA DEVICE! Cek wiring SDA/SCL.");
+    else Serial.printf("  [I2C] Total: %d device ditemukan.\n", found);
   } else if (cmd.name == "mode") {
     if (line.endsWith(" config") || line.endsWith(" calib")) {
       Serial.println("[System] Rebooting to Config (WiFi) Mode...");
@@ -1619,20 +1652,26 @@ void loop() {
     const bool noStick = (activeController == nullptr || !activeController->isConnected());
     static bool safeModePrinted = false;
 
-    if (noStick && !calibLockActive) {
-      // ── SAFE MODE: no stick, not calibrating ────────────────────────────
+    if (noStick && !calibLockActive && !safeOverride) {
+      // ── SAFE MODE: no stick, not calibrating, no override ───────────────
       // Motor mati, gripper ke posisi aman. Robot tidak bergerak sama sekali.
       if (!safeModePrinted) {
-        Serial.println("[Safe] No controller – motor OFF, gripper SAFE.");
+        Serial.println("[Safe] No controller - motor OFF, gripper SAFE.");
+        Serial.println("[Safe] Ketik 'override on' untuk test motor tanpa stick.");
         safeModePrinted = true;
       }
       if (!lastBrakeState) stopWithBrake();
-      // Gripper safe: claw tertutup (pegang barang), lifter posisi aman
       gripperFront.setClaw(true);
       gripperRear.setClaw(true);
       yawPid.reset();
+    } else if (noStick && safeOverride) {
+      // ── OVERRIDE MODE: test tanpa stick ───────────────────────────────────
+      // Jangan panggil processGamepad(nullptr) karena akan trigger stopWithBrake di line 965-966!
+      // Motor dikendalikan via serial command (move/raw/rpm), biarkan state bertahan.
+      safeModePrinted = false;
     } else {
-      safeModePrinted = false;  // reset flag saat stick connect
+      // ── STICK CONNECTED: full gamepad control ─────────────────────────────
+      safeModePrinted = false;
       processGamepad(activeController);
     }
 
