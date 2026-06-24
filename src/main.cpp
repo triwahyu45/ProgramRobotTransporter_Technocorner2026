@@ -1123,24 +1123,22 @@ void processGamepad(ControllerPtr ctl) {
     const bool l2 = triggerL2 > 0.1f;
     const bool r2 = triggerR2 > 0.1f;
 
-    // ── Slow rotate: trigger + bumper BERLAWANAN sisi = rotate ──────────────
-    // L2 (rear) + R1 = rotate KANAN  |  R2 (front) + L1 = rotate KIRI
-    // L2 (rear) + L1 = rear gripper  |  R2 (front) + R1 = front gripper
+    // ── Slow rotate: trigger HELD + bumper/trigger LAIN = rotate ──────────
+    // L2 held → R1=kanan  R2=kiri  (L1=rear gripper)
+    // R2 held → L1=kiri   L2=kanan (R1=front gripper)
     constexpr float SLOW_ROT = 45.0f;
-    if (triggerL2 > 0.3f && !l1 && r1) { slowRotateActive = true; slowRotateTurn = +SLOW_ROT; }  // L2+R1 = kanan
-    else if (triggerR2 > 0.3f && !r1 && l1) { slowRotateActive = true; slowRotateTurn = -SLOW_ROT; } // R2+L1 = kiri
+    if (triggerL2 > 0.3f) {
+      if      (r1)  { slowRotateActive = true; slowRotateTurn = +SLOW_ROT; } // L2+R1 = kanan
+      else if (r2)  { slowRotateActive = true; slowRotateTurn = -SLOW_ROT; } // L2+R2 = kiri
+    } else if (triggerR2 > 0.3f) {
+      if      (l1)  { slowRotateActive = true; slowRotateTurn = -SLOW_ROT; } // R2+L1 = kiri
+      else if (l2)  { slowRotateActive = true; slowRotateTurn = +SLOW_ROT; } // R2+L2 = kanan
+    }
 
     // Jika tidak ada stik terhubung, paksa claw tutup
     if (ctl == nullptr || !ctl->isConnected()) {
-      if (!gripperFront.isClawClosed()) {
-        gripperFront.setClaw(true);
-        Serial.println("[Gripper] Default: Front claw CLOSED");
-      }
-      if (!gripperRear.isClawClosed()) {
-        gripperRear.setClaw(true);
-        Serial.println("[Gripper] Default: Rear claw CLOSED");
-      }
-      // (setLifter diserahkan ke logika dinamis di bawah)
+      if (!gripperFront.isClawClosed()) { gripperFront.setClaw(true); Serial.println("[Gripper] Default: Front claw CLOSED"); }
+      if (!gripperRear.isClawClosed())  { gripperRear.setClaw(true);  Serial.println("[Gripper] Default: Rear claw CLOSED");  }
     }
 
     // R1: toggle claw depan — SKIP jika sedang calib mode atau slow rotate
