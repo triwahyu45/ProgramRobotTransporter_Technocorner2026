@@ -27,7 +27,7 @@ constexpr float DPAD_MOVE_PERCENT = 40.0f;           // D-pad speed
 // 55% = cukup cepat tanpa terlalu agresif. Kalau terlalu cepat, turunkan ke 45%.
 constexpr float MAX_DRIVE_PERCENT = 85.0f;
 // Max rotasi manual (stick kanan di headingControlMode=false)
-constexpr float MAX_TURN_PERCENT = 30.0f;
+constexpr float MAX_TURN_PERCENT = 20.0f;
 // Yaw correction: HARUS jauh di atas deadband FR=25%.
 // Terlalu kencang -> kurangi. Terlalu lemah -> naikkan. Osilasi -> turunkan KP di struct YawPid.
 constexpr float MAX_YAW_CORRECTION_PERCENT = 45.0f;  // DRIVING: batas saat gerak, tidak dominasi movement
@@ -39,7 +39,7 @@ constexpr float MAX_YAW_CORRECTION_PERCENT = 45.0f;  // DRIVING: batas saat gera
 constexpr float YAW_HOLD_DEADBAND_DEG      = 2.0f;   // lock angle: koreksi mulai dari 2.0deg
 constexpr float YAW_MIN_CORRECTION_PERCENT  = 35.0f;  // snap min: lebih dari deadband motor (was 28)
 constexpr bool  IDLE_YAW_HOLD_ENABLED_DEFAULT = true;
-constexpr float IDLE_YAW_MAX_TURN_PERCENT   = 100.0f; // IDLE: full speed snap (robot diam)
+constexpr float IDLE_YAW_MAX_TURN_PERCENT   = 60.0f;  // IDLE: snap koreksi heading (pelan)
 constexpr bool INVERT_MOVE_X = false;
 constexpr bool INVERT_MOVE_Y = true;
 constexpr bool INVERT_ROTATE = false;
@@ -1400,7 +1400,8 @@ void processGamepad(ControllerPtr ctl) {
   {
     static uint32_t nosHoldStartMs = 0;
     static bool nosBoostActive     = false;
-    constexpr float NOS_BASE_MULT  = 0.60f;   // 60% normal
+    constexpr float NOS_BASE_MULT  = 0.75f;   // 75% normal (cukup kenceng, tidak kebablasan)
+    constexpr float NOS_BOOST_MULT = 0.88f;   // 88% saat NOS (dicap, tidak full 100%)
     constexpr float NOS_THRESHOLD  = 88.0f;   // % dianggap "stick mentok"
     constexpr uint32_t NOS_HOLD_MS = 2000;    // tahan 2 detik untuk boost
 
@@ -1416,7 +1417,7 @@ void processGamepad(ControllerPtr ctl) {
       nosHoldStartMs = 0;
       nosBoostActive = false;
     }
-    const float nosMult = nosBoostActive ? 1.0f : NOS_BASE_MULT;
+    const float nosMult = nosBoostActive ? NOS_BOOST_MULT : NOS_BASE_MULT;
     xCommand *= nosMult;
     yCommand *= nosMult;
   }
