@@ -129,6 +129,7 @@ bool lastL2 = false;
 bool lastR1 = false;
 bool lastR2 = false;
 bool wheelTestActive = false;  // true saat mode test arah roda aktif (tahan Triangle)
+bool calibLockActive = false;  // true = semua kontrol dikunci saat kalibrasi IMU aktif
 
 Preferences preferences;
 WebServer server(80);
@@ -382,7 +383,7 @@ void handlePostTestServo() {
 void handlePostReboot() {
   server.sendHeader("Access-Control-Allow-Origin", "*");
   server.send(200, "application/json", "{\"status\":\"ok\",\"message\":\"Rebooting to competition mode...\"}");
-  delay(500);
+  Serial.flush();
   
   saveConfigurations();
   setBootMode(0);
@@ -410,7 +411,7 @@ void startConfigMode() {
 
   uint32_t startAttemptTime = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - startAttemptTime < 10000) {
-    delay(500);
+    yield();
     Serial.print(".");
   }
   Serial.println();
@@ -645,14 +646,36 @@ void toggleYawHoldFromGamepad() {
   Serial.println(yawHoldEnabled ? "ON" : "OFF");
 }
 
-// ─── Gripper wiggle: feedback visual/taktil untuk event penting ───
-// times=1: "combo terdeteksi", times=2: "memulai", times=3: "selesai"
-void gripperWiggle(int times = 2) {
-  const bool fc = gripperFront.isClawClosed();
-  const bool rc = gripperRear.isClawClosed();
-  for (int i = 0; i < times; i++) {
-    gripperFront.setClaw(!fc); gripperRear.setClaw(!rc); delay(130);
-    gripperFront.setClaw(fc);  gripperRear.setClaw(rc);  delay(130);
+// ─── Non-blocking gripper wiggle state machine ───────────────────────────────────
+// times=1: combo terdeteksi | times=2: mulai kalibrasi | times=3: selesai
+static uint8_t  wgl_remaining = 0;
+static uint8_t  wgl_step      = 0;
+static uint32_t wgl_lastMs    = 0;
+static bool     wgl_origFC    = false;
+static bool     wgl_origRC    = false;
+
+void startGripperWiggle(int times) {
+  if (times <= 0) return;
+  wgl_origFC    = gripperFront.isClawClosed();
+  wgl_origRC    = gripperRear.isClawClosed();
+  wgl_remaining = (uint8_t)(times * 2);
+  wgl_step      = 0;
+  wgl_lastMs    = millis();
+}
+
+bool isWiggleBusy() { return wgl_remaining > 0; }
+
+void updateGripperWiggle() {
+  if (!wgl_remaining) return;
+  if (millis() - wgl_lastMs < 130) return;
+  wgl_lastMs = millis();
+  bool flip = (wgl_step % 2 == 0);
+  gripperFront.setClaw(flip ? !wgl_origFC : wgl_origFC);
+  gripperRear.setClaw(flip  ? !wgl_origRC : wgl_origRC);
+  ++wgl_step;
+  if (!--wgl_remaining) {
+    gripperFront.setClaw(wgl_origFC);  // restore posisi asal
+    gripperRear.setClaw(wgl_origRC);
   }
 }
 
@@ -709,7 +732,7 @@ void processGamepad(ControllerPtr ctl) {
     } else if (millis() - btRestartTriggerMs > 2000) {
       Serial.println("[System] Restarting untuk BT re-pair...");
       stopWithBrake();
-      delay(300);
+      Serial.flush();
       ESP.restart();
     }
   } else {
@@ -725,40 +748,73 @@ void processGamepad(ControllerPtr ctl) {
     } else if (millis() - wifiConfigTriggerMs > 3000) {
       Serial.println("[System] Memasuki WiFi Config Mode! Rebooting...");
       setBootMode(1);
-      delay(500);
+      Serial.flush();
       ESP.restart();
     }
   } else {
     wifiConfigTriggerMs = 0;
   }
 
-  // ─── Trigger IMU Gyro Calibration (L1 + R1 + Share + Options ditahan 2 detik) ───
-  static uint32_t imuCalibTriggerStartMs = 0;
+  // ─── IMU Gyro Calibration (L1+R1+Share+Options held 2s) ─────────────────────
+  static uint32_t imuCalibTriggerMs  = 0;
   static uint32_t imuCalibLastBeepMs = 0;
-  if (ctl && ctl->isConnected() && ctl->l1() && ctl->r1() && ctl->miscSelect() && ctl->miscStart()) {
-    if (imuCalibTriggerStartMs == 0) {
-      imuCalibTriggerStartMs = millis();
-      imuCalibLastBeepMs = 0;
-      gripperWiggle(1);  // 1 wiggle = combo terdeteksi, mulai tahan!
-      Serial.println("[Calib] L1+R1+Share+Options terdeteksi. Tahan 2 detik...");
+  static uint32_t calibSafeGripMs    = 0;
+  const bool calibCombo = ctl && ctl->isConnected()
+      && ctl->l1() && ctl->r1() && ctl->miscSelect() && ctl->miscStart();
+
+  if (calibLockActive) {
+    // Dalam lock: detect exit (combo sama ditahan 2 detik)
+    if (calibCombo) {
+      if (imuCalibTriggerMs == 0) {
+        imuCalibTriggerMs = millis();
+        Serial.println("[Calib] Tahan 2 detik untuk keluar mode kalibrasi...");
+      } else if (millis() - imuCalibTriggerMs > 2000) {
+        calibLockActive   = false;
+        imuCalibTriggerMs = 0;
+        calibSafeGripMs   = 0;
+        Serial.println("[Calib] Mode kalibrasi diakhiri secara manual.");
+        startGripperWiggle(3);
+      }
     } else {
-      uint32_t held = millis() - imuCalibTriggerStartMs;
-      // Countdown tiap detik via serial
-      if (held > 1000 && imuCalibLastBeepMs < 1000) {
-        imuCalibLastBeepMs = 1000;
-        Serial.println("[Calib] 1 detik lagi...");
-      }
-      if (held > 2000) {
-        gripperWiggle(2);  // 2 wiggles = mulai kalibrasi!
-        Serial.println("[Calib] Memulai Kalibrasi IMU - robot harus DIAM!");
-        stopWithBrake();
-        Imu().startGyroCalibration();
-        imuCalibTriggerStartMs = 0;
-        imuCalibLastBeepMs = 0;
-      }
+      imuCalibTriggerMs = 0;
     }
+    // Safe grip wait: setelah 1 detik, mulai kalibrasi
+    if (calibSafeGripMs > 0 && millis() - calibSafeGripMs > 1000) {
+      calibSafeGripMs = 0;
+      stopWithBrake();
+      Imu().startGyroCalibration();
+      Serial.println("[Calib] Memulai Kalibrasi IMU - robot harus DIAM!");
+    }
+    // Kunci semua kontrol saat dalam mode kalibrasi
+    return;
   } else {
-    imuCalibTriggerStartMs = 0;
+    // Normal: detect enter combo
+    if (calibCombo) {
+      if (imuCalibTriggerMs == 0) {
+        imuCalibTriggerMs  = millis();
+        imuCalibLastBeepMs = 0;
+        startGripperWiggle(1);
+        Serial.println("[Calib] L1+R1+Share+Options. Tahan 2 detik...");
+      } else {
+        uint32_t held = millis() - imuCalibTriggerMs;
+        if (held > 1000 && imuCalibLastBeepMs < 1000) {
+          imuCalibLastBeepMs = 1000;
+          Serial.println("[Calib] 1 detik lagi...");
+        }
+        if (held > 2000) {
+          calibLockActive    = true;
+          imuCalibTriggerMs  = 0;
+          imuCalibLastBeepMs = 0;
+          gripperFront.setClaw(true);
+          gripperRear.setClaw(true);
+          calibSafeGripMs = millis();
+          startGripperWiggle(2);
+          Serial.println("[Calib] Safe grip... kalibrasi mulai dalam 1 detik.");
+        }
+      }
+    } else {
+      imuCalibTriggerMs = 0;
+    }
   }
 
   // ─── Gripper diupdate SELALU, bahkan saat calibrating / disconnect ───
@@ -1338,19 +1394,19 @@ void handleCommand(String line) {
     if (line.endsWith(" config") || line.endsWith(" calib")) {
       Serial.println("[System] Rebooting to Config (WiFi) Mode...");
       setBootMode(1);
-      delay(500);
+      Serial.flush();
       ESP.restart();
     } else if (line.endsWith(" comp") || line.endsWith(" normal")) {
       Serial.println("[System] Rebooting to Competition (Gamepad) Mode...");
       setBootMode(0);
-      delay(500);
+      Serial.flush();
       ESP.restart();
     } else {
       Serial.println("Usage: mode config | mode comp");
     }
   } else if (cmd.name == "restart" || cmd.name == "rst") {
     Serial.println("[System] Restarting ESP32 for BT re-pair...");
-    delay(300);
+    Serial.flush();
     ESP.restart();
   } else if (cmd.name == "heading") {
     // heading <deg> - set target heading dari serial, aktifkan yaw hold
@@ -1544,15 +1600,18 @@ void loop() {
     UpdateWheelSpeedController();
   }
 
-  // Detect calibration selesai → 3 wiggles sebagai tanda
+  // Detect kalibrasi selesai: unlock control + wiggle 3x
   static bool wasCalibrating = false;
   const bool nowCalibrating = Imu().isCalibrating();
   if (wasCalibrating && !nowCalibrating) {
+    calibLockActive = false;
     Serial.println("[Calib] Kalibrasi IMU SELESAI! Gyro & Accel terkalibrasi.");
-    gripperWiggle(3);  // 3 wiggles = kalibrasi selesai!
-    zeroYawTarget();   // reset yaw target ke 0 setelah kalibrasi
+    startGripperWiggle(3);  // 3 wiggles = kalibrasi selesai
+    yawTargetDeg = Imu().telemetry().yawDeg;
+    yawPid.reset();
   }
   wasCalibrating = nowCalibrating;
+  updateGripperWiggle();  // update wiggle state machine setiap loop
 
   const uint32_t nowMs = millis();
   if (telemetryEnabled && nowMs - lastTelemetryMs >= TELEMETRY_PERIOD_MS) {
