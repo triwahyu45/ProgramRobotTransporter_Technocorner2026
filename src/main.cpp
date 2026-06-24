@@ -1263,6 +1263,48 @@ void processGamepad(ControllerPtr ctl) {
       lastTargetRear = targetRear;
     }
 
+    // ── Ramp Stall Lifter Assist ──────────────────────────────────────────────
+    // Saat robot stuck di tanjakan (miring + stick didorong + bertahan >1.5 detik),
+    // lifter auto ke 160° jadi leverage: bantu roda depan ngegrip, cegah keangkat.
+    // Ramp lomba ~20° → deteksi mulai 10° agar antisipasi lebih awal.
+    {
+      constexpr float    RAMP_PITCH_DEG  = 10.0f;   // tanjakan >10° mulai deteksi
+      constexpr uint32_t RAMP_HOLD_MS    = 1500;    // stuck >1.5 detik → aktif
+      constexpr float    RAMP_LIFT_ANGLE = 160.0f;  // servo target leverage
+
+      const bool onRamp    = imu.ready && !Imu().isCalibrating()
+                          && fabsf(imu.pitchDeg) > RAMP_PITCH_DEG;
+      const bool pushing   = ctl && (fabsf((float)ctl->axisY()) > 80.0f
+                                  || fabsf((float)ctl->axisX()) > 80.0f);
+      const bool noAntitip = !triggeredForward && !triggeredBackward;
+
+      static uint32_t rampStallStart = 0;
+      static bool     rampStallActive = false;
+
+      if (onRamp && pushing && noAntitip) {
+        if (rampStallStart == 0) rampStallStart = millis();
+        if (!rampStallActive && (millis() - rampStallStart > RAMP_HOLD_MS)) {
+          rampStallActive = true;
+          Serial.printf("[RampStall] Stuck di tanjakan %.1f deg -> lifter 160 deg\n", imu.pitchDeg);
+        }
+      } else {
+        if (rampStallActive) {
+          Serial.println("[RampStall] Selesai -> lifter kembali normal");
+          lastTargetFront = -999.0f;
+          lastTargetRear  = -999.0f;
+        }
+        rampStallActive = false;
+        rampStallStart  = 0;
+      }
+
+      if (rampStallActive) {
+        servoLiftFront.setAngle(RAMP_LIFT_ANGLE);
+        servoLiftRear.setAngle(RAMP_LIFT_ANGLE);
+        lastTargetFront = -999.0f;
+        lastTargetRear  = -999.0f;
+      }
+    }
+
     lastL1 = l1;  lastL2 = l2;
     lastR1 = r1;  lastR2 = r2;
   }
