@@ -75,19 +75,19 @@
 //   MOTOR_INVERTED=true  + ENC_INVERTED=false → feedback positif ✓
 //   MOTOR_INVERTED=false + ENC_INVERTED=true  → feedback positif ✓
 //   Kalau sama-sama true/false → NEGATIF FEEDBACK → PID RUNAWAY!
-#define ENC_FL_INVERTED     false   // FL: MOTOR_INVERTED=true → ENC harus false
-#define ENC_FR_INVERTED     false   // FR: MOTOR_INVERTED=true → ENC harus false (gearbox baru!)
-#define ENC_RL_INVERTED     true    // RL: MOTOR_INVERTED=false → ENC orientasi asli
-#define ENC_RR_INVERTED     false   // RR: MOTOR_INVERTED=true → ENC harus false
+#define ENC_FL_INVERTED     false   // FL: MOTOR_INVERTED=true  → ENC harus false
+#define ENC_FR_INVERTED     false   // FR: MOTOR_INVERTED=true  → ENC harus false
+#define ENC_RL_INVERTED     true    // RL: MOTOR_INVERTED=false → ENC harus true
+#define ENC_RR_INVERTED     true    // RR: MOTOR_INVERTED=false → ENC harus true
 
 // Flip motor jika positive command bikin roda mundur.
 // FL dan FR: gearbox baru → arah terbalik → di-invert
 // RR: arah terbalik (mounting/wiring) → di-invert
 // RL: arah benar → tidak di-invert
 #define MOTOR_FL_INVERTED   true    // gearbox baru, arah terbalik
-#define MOTOR_FR_INVERTED   true    // gearbox baru (PPR=408), arah terbalik!
+#define MOTOR_FR_INVERTED   true    // gearbox baru (PPR=408), arah terbalik
 #define MOTOR_RL_INVERTED   false   // gearbox lama, arah benar
-#define MOTOR_RR_INVERTED   true    // arah terbalik (mounting)
+#define MOTOR_RR_INVERTED   false   // DIBALIK 2026-06-24: channel fix → arah berubah
 
 // ─── Servo GPIO (langsung dari ESP32, bukan PCA9685) ──────────────────────────
 // Sesuai skematik hardware:

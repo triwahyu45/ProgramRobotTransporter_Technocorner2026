@@ -33,12 +33,10 @@ constexpr bool INVERT_MOVE_X = false;
 constexpr bool INVERT_MOVE_Y = true;
 constexpr bool INVERT_ROTATE = false;
 constexpr bool YAW_CORRECTION_INVERTED_DEFAULT = true;
-// DRIVE_CLOSED_LOOP_DEFAULT = false: Encoder FL/FR terkena EMI dari motor
-// sehingga measured RPM jauh di atas nilai sebenarnya (5 RPM target -> baca 85 RPM).
-// PID lalu 'mengoreksi' nilai palsu -> command drop -> motor berhenti -> patah-patah.
-// Open-loop jauh lebih smooth. Setelah pasang RC filter hardware (100ohm+100nF),
-// bisa coba closed-loop lagi.
-constexpr bool DRIVE_CLOSED_LOOP_DEFAULT = false;
+// DRIVE_CLOSED_LOOP_DEFAULT: setelah channel mapping fix (2026-06-24), encoder FL/FR reliable.
+// RL/RR pakai feed-forward only (GPIO 34/35/36/39 = input-only, noise prone).
+// WheelSpeedController.computeCommand() otomatis handle via flag hasEncoder per-wheel.
+constexpr bool DRIVE_CLOSED_LOOP_DEFAULT = true;
 constexpr bool RESET_BLUETOOTH_PAIRING_ON_BOOT = false;
 
 struct YawPid {
