@@ -88,9 +88,9 @@ bool lastSquareButton = false;
 bool lastStartButton = false;
 
 // ─── Configurable Parameters (NVS Preferences) ──────────────────────────
-float cfg_pid_kp = 1.15f;
-float cfg_pid_ki = 0.0f;
-float cfg_pid_kd = 0.035f;
+float cfg_pid_kp = 1.20f;   // Autotune optimal (KD=0.40 menghilangkan overshoot)
+ float cfg_pid_ki = 0.0f;
+float cfg_pid_kd = 0.40f;
 
 float cfg_claw_depan_min = AngleClaw_Depan_MIN;
 float cfg_claw_depan_max = AngleClaw_Depan_MAX;
@@ -137,9 +137,9 @@ bool inConfigMode = false;
 
 void loadConfigurations() {
   preferences.begin("robot_cfg", true); // read-only
-  cfg_pid_kp = preferences.getFloat("pid_kp", 1.15f);
+  cfg_pid_kp = preferences.getFloat("pid_kp", 1.20f);
   cfg_pid_ki = preferences.getFloat("pid_ki", 0.0f);
-  cfg_pid_kd = preferences.getFloat("pid_kd", 0.035f);
+  cfg_pid_kd = preferences.getFloat("pid_kd", 0.40f);
 
   cfg_claw_depan_min = preferences.getFloat("claw_f_min", AngleClaw_Depan_MIN);
   cfg_claw_depan_max = preferences.getFloat("claw_f_max", AngleClaw_Depan_MAX);
@@ -755,7 +755,7 @@ void processGamepad(ControllerPtr ctl) {
     wifiConfigTriggerMs = 0;
   }
 
-  // ─── IMU Gyro Calibration (L1+R1+Share+Options held 2s) ─────────────────────
+  // ─── IMU Gyro Calibration (L1+R1+Share+Options ditahan 3 detik) ───
   static uint32_t imuCalibTriggerMs  = 0;
   static uint32_t imuCalibLastBeepMs = 0;
   static uint32_t calibSafeGripMs    = 0;
@@ -763,12 +763,12 @@ void processGamepad(ControllerPtr ctl) {
       && ctl->l1() && ctl->r1() && ctl->miscSelect() && ctl->miscStart();
 
   if (calibLockActive) {
-    // Dalam lock: detect exit (combo sama ditahan 2 detik)
+    // ── Dalam lock mode: detect exit (combo ditahan 3 detik) ─────────────
     if (calibCombo) {
       if (imuCalibTriggerMs == 0) {
         imuCalibTriggerMs = millis();
-        Serial.println("[Calib] Tahan 2 detik untuk keluar mode kalibrasi...");
-      } else if (millis() - imuCalibTriggerMs > 2000) {
+        Serial.println("[Calib] Tahan 3 detik untuk keluar mode kalibrasi...");
+      } else if (millis() - imuCalibTriggerMs > 3000) {
         calibLockActive   = false;
         imuCalibTriggerMs = 0;
         calibSafeGripMs   = 0;
@@ -778,41 +778,48 @@ void processGamepad(ControllerPtr ctl) {
     } else {
       imuCalibTriggerMs = 0;
     }
-    // Safe grip wait: setelah 1 detik, mulai kalibrasi
+    // ── Safe grip wait: setelah 1 detik, mulai kalibrasi ─────────────────
     if (calibSafeGripMs > 0 && millis() - calibSafeGripMs > 1000) {
       calibSafeGripMs = 0;
       stopWithBrake();
       Imu().startGyroCalibration();
       Serial.println("[Calib] Memulai Kalibrasi IMU - robot harus DIAM!");
     }
-    // Kunci semua kontrol saat dalam mode kalibrasi
+    // Semua kontrol dikunci selama dalam mode kalibrasi
     return;
   } else {
-    // Normal: detect enter combo
+    // ── Normal: detect enter combo ────────────────────────────────────────
     if (calibCombo) {
       if (imuCalibTriggerMs == 0) {
+        // Frame pertama combo terdeteksi: mulai timer, TIDAK ada aksi fisik
         imuCalibTriggerMs  = millis();
         imuCalibLastBeepMs = 0;
-        startGripperWiggle(1);
-        Serial.println("[Calib] L1+R1+Share+Options. Tahan 2 detik...");
+        Serial.println("[Calib] L1+R1+Share+Options terdeteksi. Tahan 3 detik...");
       } else {
         uint32_t held = millis() - imuCalibTriggerMs;
+        // Countdown tiap detik
         if (held > 1000 && imuCalibLastBeepMs < 1000) {
           imuCalibLastBeepMs = 1000;
+          Serial.println("[Calib] 2 detik lagi...");
+        }
+        if (held > 2000 && imuCalibLastBeepMs < 2000) {
+          imuCalibLastBeepMs = 2000;
           Serial.println("[Calib] 1 detik lagi...");
         }
-        if (held > 2000) {
+        if (held > 3000) {
+          // Masuk calib lock setelah TEPAT 3 detik
           calibLockActive    = true;
           imuCalibTriggerMs  = 0;
           imuCalibLastBeepMs = 0;
-          gripperFront.setClaw(true);
+          gripperFront.setClaw(true);   // safe: tutup semua gripper
           gripperRear.setClaw(true);
-          calibSafeGripMs = millis();
-          startGripperWiggle(2);
-          Serial.println("[Calib] Safe grip... kalibrasi mulai dalam 1 detik.");
+          calibSafeGripMs = millis();   // tunggu 1 detik lalu mulai kalibrasi
+          startGripperWiggle(2);        // 2 wiggle = entering calib mode
+          Serial.println("[Calib] Masuk mode kalibrasi! Safe grip... mulai dalam 1 detik.");
         }
       }
     } else {
+      // Combo dilepas sebelum selesai: reset timer (tidak ada aksi)
       imuCalibTriggerMs = 0;
     }
   }
@@ -848,14 +855,14 @@ void processGamepad(ControllerPtr ctl) {
       // (setLifter diserahkan ke logika dinamis di bawah)
     }
 
-    // L1: toggle claw depan (edge: hanya saat pertama kali ditekan)
-    if (l1 && !lastL1) {
+    // L1: toggle claw depan — SKIP jika sedang hold calib combo
+    if (l1 && !lastL1 && !calibCombo) {
       gripperFront.toggleClaw();
       Serial.printf("[Gripper] Depan claw: %s\n",
                     gripperFront.isClawClosed() ? "CLOSE" : "OPEN");
     }
-    // R1: toggle claw belakang
-    if (r1 && !lastR1) {
+    // R1: toggle claw belakang — SKIP jika sedang hold calib combo
+    if (r1 && !lastR1 && !calibCombo) {
       gripperRear.toggleClaw();
       Serial.printf("[Gripper] Belakang claw: %s\n",
                     gripperRear.isClawClosed() ? "CLOSE" : "OPEN");
