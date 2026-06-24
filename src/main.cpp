@@ -30,7 +30,7 @@ constexpr float MAX_DRIVE_PERCENT = 75.0f;
 constexpr float MAX_TURN_PERCENT = 55.0f;
 // Yaw correction: HARUS jauh di atas deadband FR=25%.
 // Terlalu kencang -> kurangi. Terlalu lemah -> naikkan. Osilasi -> turunkan KP di struct YawPid.
-constexpr float MAX_YAW_CORRECTION_PERCENT = 90.0f;  // max speed untuk rise <1s
+constexpr float MAX_YAW_CORRECTION_PERCENT = 45.0f;  // DRIVING: batas saat gerak, tidak dominasi movement
 // IDLE_YAW_HOLD: aktifkan agar right stick bisa aim bahkan saat robot diam.
 // Saat idle + right stick arah kanan → robot rotate ke kanan & hold.
 // Deadband 3°: stop koreksi kecil di bawah batas drift IMU.
@@ -39,7 +39,7 @@ constexpr float MAX_YAW_CORRECTION_PERCENT = 90.0f;  // max speed untuk rise <1s
 constexpr float YAW_HOLD_DEADBAND_DEG      = 2.5f;   // lebih lebar = kurangi osilasi near target (was 2.0)
 constexpr float YAW_MIN_CORRECTION_PERCENT  = 35.0f;  // snap min: lebih dari deadband motor (was 28)
 constexpr bool  IDLE_YAW_HOLD_ENABLED_DEFAULT = true;
-constexpr float IDLE_YAW_MAX_TURN_PERCENT   = 85.0f;  // max idle speed
+constexpr float IDLE_YAW_MAX_TURN_PERCENT   = 100.0f; // IDLE: full speed snap (robot diam)
 constexpr bool INVERT_MOVE_X = false;
 constexpr bool INVERT_MOVE_Y = true;
 constexpr bool INVERT_ROTATE = false;
@@ -54,9 +54,9 @@ constexpr bool DRIVE_CLOSED_LOOP_DEFAULT = false;
 constexpr bool RESET_BLUETOOTH_PAIRING_ON_BOOT = false;
 
 struct YawPid {
-  float kp = 1.50f;  // naik 1.2->1.5: lebih responsif (KD ikut naik untuk damping)
+  float kp = 5.00f;  // FAST: autotune optimal at MAX=100% (was 3.0)
   float ki = 0.0f;
-  float kd = 0.55f;  // naik 0.40->0.55: damping lebih kuat di speed tinggi
+  float kd = 0.70f;  // LOW KD = terminal velocity tinggi, zero overshoot (was 1.5)
   float integral  = 0.0f;
   float lastError = 0.0f;  // untuk hysteresis ±180° boundary
   uint32_t lastUs = 0;
@@ -88,9 +88,9 @@ bool lastSquareButton = false;
 bool lastStartButton = false;
 
 // ─── Configurable Parameters (NVS Preferences) ──────────────────────────
-float cfg_pid_kp = 1.50f;   // KP naik untuk responsivitas
+float cfg_pid_kp = 5.00f;   // Autotune final: rise 0.1s zero overshoot
  float cfg_pid_ki = 0.0f;
-float cfg_pid_kd = 0.55f;   // KD naik proporsional
+float cfg_pid_kd = 0.70f;
 
 float cfg_claw_depan_min = AngleClaw_Depan_MIN;
 float cfg_claw_depan_max = AngleClaw_Depan_MAX;
@@ -137,9 +137,9 @@ bool inConfigMode = false;
 
 void loadConfigurations() {
   preferences.begin("robot_cfg", true); // read-only
-  cfg_pid_kp = preferences.getFloat("pid_kp", 1.50f);
+  cfg_pid_kp = preferences.getFloat("pid_kp", 5.00f);
   cfg_pid_ki = preferences.getFloat("pid_ki", 0.0f);
-  cfg_pid_kd = preferences.getFloat("pid_kd", 0.55f);
+  cfg_pid_kd = preferences.getFloat("pid_kd", 0.70f);
 
   cfg_claw_depan_min = preferences.getFloat("claw_f_min", AngleClaw_Depan_MIN);
   cfg_claw_depan_max = preferences.getFloat("claw_f_max", AngleClaw_Depan_MAX);
@@ -546,7 +546,9 @@ float yawPidUpdate(float targetDeg, float measuredDeg, float gyroZDegPerSec) {
   // Derivative on measurement, seperti referensi UNY: pakai gyro yaw rate, bukan selisih error kasar.
   const float output = (yawPid.kp * error) + yawPid.integral - (yawPid.kd * gyroZDegPerSec);
   const float direction = yawCorrectionInverted ? -1.0f : 1.0f;
-  return constrain(output * direction, -MAX_TURN_PERCENT, MAX_TURN_PERCENT);
+  // JANGAN constrain di sini! Biarkan caller yang set batas sesuai kebutuhan.
+  // Dulu: constrain ke MAX_TURN_PERCENT=55% → heading correction cuma 55% meski limit=100%!
+  return output * direction;
 }
 
 void applyFieldCentric(float &x, float &y, float yawDeg) {
@@ -1102,11 +1104,12 @@ void processGamepad(ControllerPtr ctl) {
       yawPid.reset();
       lastManualTurn = false;
     }
-    // Clamp yaw PID output agar tidak spin terlalu kencang saat angle lock
-    const float rawYaw = constrain(
-      yawPidUpdate(yawTargetDeg, imu.yawDeg, imu.gyroZ) * speedMultiplier,
-      -MAX_YAW_CORRECTION_PERCENT, MAX_YAW_CORRECTION_PERCENT
-    );
+    // Clamp yaw PID output saat driving: batasi agar tidak swing/osilasi
+    // IDLE pakai IDLE_YAW_MAX=100%, DRIVING pakai MAX_YAW_CORRECTION=45%
+    // Skala dengan speedMultiplier SETELAH clamp (bukan sebelum) agar cap efektif
+    const float rawYawPid = yawPidUpdate(yawTargetDeg, imu.yawDeg, imu.gyroZ);
+    const float rawYaw = constrain(rawYawPid, -MAX_YAW_CORRECTION_PERCENT, MAX_YAW_CORRECTION_PERCENT)
+                         * speedMultiplier;
     // Snap: selalu pastikan output di atas motor deadband
     turnCommand = (fabsf(rawYaw) > 0.5f && fabsf(rawYaw) < YAW_MIN_CORRECTION_PERCENT)
         ? copysignf(YAW_MIN_CORRECTION_PERCENT, rawYaw)
