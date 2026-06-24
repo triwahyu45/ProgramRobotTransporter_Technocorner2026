@@ -25,7 +25,7 @@ constexpr int STICK_MAX = 512;
 constexpr float DPAD_MOVE_PERCENT = 40.0f;           // D-pad speed
 // Speed: open-loop, 55% PWM langsung ke ZK-5AD. Deadband FL=20%, FR=25%.
 // 55% = cukup cepat tanpa terlalu agresif. Kalau terlalu cepat, turunkan ke 45%.
-constexpr float MAX_DRIVE_PERCENT = 67.0f;
+constexpr float MAX_DRIVE_PERCENT = 80.0f;
 // Max rotasi manual (stick kanan di headingControlMode=false)
 constexpr float MAX_TURN_PERCENT = 20.0f;
 // Yaw correction: HARUS jauh di atas deadband FR=25%.
