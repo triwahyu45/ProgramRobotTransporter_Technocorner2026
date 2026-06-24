@@ -612,7 +612,11 @@ int16_t percentToRawCommand(float percent) {
 void driveRobotRawPercent(float x, float y, float turn) {
   SpeedController().setEnabled(false);
   const WheelCommand mix = MixOmni4(percentToRawCommand(x), percentToRawCommand(y), percentToRawCommand(turn));
-  DriveAll(mix.fl, mix.fr, mix.rl, mix.rr);
+  // Kompensasi RPM mismatch: front=1260RPM, rear=2815RPM → scale rear supaya linear speed sama
+  constexpr float REAR_SCALE = MAX_WHEEL_RPM_FRONT / MAX_WHEEL_RPM_REAR;  // ≈ 0.447
+  DriveAll(mix.fl, mix.fr,
+           static_cast<int16_t>(mix.rl * REAR_SCALE),
+           static_cast<int16_t>(mix.rr * REAR_SCALE));
 }
 
 void driveRobot(float x, float y, float turn) {
