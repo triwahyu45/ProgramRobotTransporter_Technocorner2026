@@ -24,6 +24,7 @@ public:
   void startGyroCalibration();
   bool isCalibrating() const;
   uint16_t calibrationSamples() const;
+  void updateBuzzer();  // call from main loop — non-blocking buzzer state machine
 
 private:
   void updateCalibration(uint32_t nowUs);
@@ -45,9 +46,8 @@ private:
   float _rollEstimateDeg = 0.0f;
   float _pitchEstimateDeg = 0.0f;
   // Non-blocking buzzer state machine (no delay())
-  uint8_t  _buzzerPhase = 0;   // 0=idle, 1-4=active phases
+  uint8_t  _buzzerPhase = 0;   // 0=idle, 1=single beep, 5-7=double beep
   uint32_t _buzzerMs    = 0;
-  void     updateBuzzer();
 };
 
 ImuManager &Imu();

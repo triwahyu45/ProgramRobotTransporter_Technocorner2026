@@ -2050,6 +2050,7 @@ void setup() {
 void loop() {
   pollSerial();
   Imu().update();
+  Imu().updateBuzzer();  // non-blocking buzzer state machine (no delay)
 
   if (inConfigMode) {
     server.handleClient();

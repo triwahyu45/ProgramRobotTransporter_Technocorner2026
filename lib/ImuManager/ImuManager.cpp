@@ -226,10 +226,10 @@ void ImuManager::startGyroCalibration() {
   _calibrationSumZ = 0.0;
   Serial.println("IMU gyro calibration started. Keep robot still.");
 
-  // Sound buzzer beep to indicate start
+  // Sound buzzer beep to indicate start (non-blocking)
   digitalWrite(PIN_BUZZER, HIGH);
-  delay(200);
-  digitalWrite(PIN_BUZZER, LOW);
+  _buzzerPhase = 1;   // single beep 200ms
+  _buzzerMs    = millis();
 }
 
 bool ImuManager::isCalibrating() const {
@@ -277,14 +277,10 @@ void ImuManager::updateCalibration(uint32_t nowUs) {
   prefs.end();
   Serial.println("IMU gyro calibration saved to NVS.");
 
-  // Sound buzzer double beep to indicate completion
+  // Sound buzzer double beep to indicate completion (non-blocking)
   digitalWrite(PIN_BUZZER, HIGH);
-  delay(100);
-  digitalWrite(PIN_BUZZER, LOW);
-  delay(100);
-  digitalWrite(PIN_BUZZER, HIGH);
-  delay(100);
-  digitalWrite(PIN_BUZZER, LOW);
+  _buzzerPhase = 5;   // double-beep sequence start
+  _buzzerMs    = millis();
 
   Serial.print("IMU gyro calibration done. Offset dps: ");
   Serial.print(_gyroOffsetX, 4);
@@ -295,3 +291,22 @@ void ImuManager::updateCalibration(uint32_t nowUs) {
 }
 
 ImuManager &Imu() { return imuManager; }
+
+void ImuManager::updateBuzzer() {
+  if (_buzzerPhase == 0) return;
+  uint32_t now = millis();
+  switch (_buzzerPhase) {
+    case 1:  // single beep: 200ms HIGH then done
+      if (now - _buzzerMs >= 200) { digitalWrite(PIN_BUZZER, LOW); _buzzerPhase = 0; }
+      break;
+    case 5:  // double beep: first 100ms HIGH
+      if (now - _buzzerMs >= 100) { digitalWrite(PIN_BUZZER, LOW); _buzzerPhase = 6; _buzzerMs = now; }
+      break;
+    case 6:  // double beep: 100ms LOW gap
+      if (now - _buzzerMs >= 100) { digitalWrite(PIN_BUZZER, HIGH); _buzzerPhase = 7; _buzzerMs = now; }
+      break;
+    case 7:  // double beep: second 100ms HIGH then done
+      if (now - _buzzerMs >= 100) { digitalWrite(PIN_BUZZER, LOW); _buzzerPhase = 0; }
+      break;
+  }
+}
