@@ -40,7 +40,7 @@ constexpr float IDLE_YAW_MAX_TURN_PERCENT = 35.0f;
 constexpr bool INVERT_MOVE_X = false;
 constexpr bool INVERT_MOVE_Y = true;
 constexpr bool INVERT_ROTATE = false;
-constexpr bool YAW_CORRECTION_INVERTED_DEFAULT = false;  // false = arah koreksi benar
+constexpr bool YAW_CORRECTION_INVERTED_DEFAULT = true;   // BENAR: +error→-turn→CCW→yaw naik→reach target
 
 // DRIVE_CLOSED_LOOP: DEFAULT = false (open-loop) karena motor ZK-5AD punya respons non-linear.
 // Di RPM rendah (<50% PWM), actual RPM JAUH lebih tinggi dari prediksi linear feedforward.
@@ -51,9 +51,9 @@ constexpr bool DRIVE_CLOSED_LOOP_DEFAULT = false;
 constexpr bool RESET_BLUETOOTH_PAIRING_ON_BOOT = false;
 
 struct YawPid {
-  float kp = 1.5f;
+  float kp = 1.1f;   // turun dari 1.5: kurangi osilasi
   float ki = 0.0f;
-  float kd = 0.12f;
+  float kd = 0.18f;  // naik dari 0.12: damping lebih kuat biar gak overshoot
   float integral  = 0.0f;
   float lastError = 0.0f;  // untuk hysteresis ±180° boundary
   uint32_t lastUs = 0;
@@ -532,8 +532,8 @@ float yawPidUpdate(float targetDeg, float measuredDeg, float gyroZDegPerSec) {
   float error = wrap180(wrap180(targetDeg) - wrap180(measuredDeg));
 
   // Hysteresis ±180° boundary: mencegah chattering saat target tepat berlawanan dengan robot.
-  // Tanpa ini: yaw -47 vs -48 bikin error berganti +179/-179 tiap 0.5s → motor balik-balik arah.
-  if (fabsf(error) > 170.0f && fabsf(yawPid.lastError) > 170.0f && error * yawPid.lastError < 0.0f) {
+  // Threshold 150° (bukan 170°) agar aktif LEBIH AWAL sebelum osilasi sempat mulai.
+  if (fabsf(error) > 150.0f && fabsf(yawPid.lastError) > 150.0f && error * yawPid.lastError < 0.0f) {
     error = yawPid.lastError;  // pertahankan arah sebelumnya agar tidak flip
   }
   yawPid.lastError = error;
