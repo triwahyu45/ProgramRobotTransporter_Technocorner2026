@@ -157,8 +157,11 @@ void loadConfigurations() {
   cfg_lift_belakang_min = preferences.getFloat("lift_r_min", AngleLifter_Belakang_MIN);
   cfg_lift_belakang_max = preferences.getFloat("lift_r_max", AngleLifter_Belakang_MAX);
 
-  cfg_antitip_pitch_forward = preferences.getFloat("tip_pitch_f", ANTITIP_PITCH_FORWARD_LIMIT);
-  cfg_antitip_pitch_backward = preferences.getFloat("tip_pitch_b", ANTITIP_PITCH_BACKWARD_LIMIT);
+  // Antitip pitch: selalu pakai hardcoded constant (bypass NVS lama yg mungkin simpan nilai 45°)
+  cfg_antitip_pitch_forward  = ANTITIP_PITCH_FORWARD_LIMIT;
+  cfg_antitip_pitch_backward = ANTITIP_PITCH_BACKWARD_LIMIT;
+  preferences.putFloat("tip_pitch_f", cfg_antitip_pitch_forward);   // update NVS
+  preferences.putFloat("tip_pitch_b", cfg_antitip_pitch_backward);  // update NVS
   cfg_antitip_roll = preferences.getFloat("tip_roll", ANTITIP_ROLL_LIMIT);
   cfg_antitip_roll_throttle = preferences.getFloat("tip_roll_th", ANTITIP_ROLL_LIFTER_THROTTLE);
   preferences.end();
