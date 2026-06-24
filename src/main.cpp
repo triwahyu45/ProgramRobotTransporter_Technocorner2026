@@ -1419,6 +1419,32 @@ void handleCommand(String line) {
     cfg_pid_kd = yawPid.kd;
     saveConfigurations();
     Serial.println("[Save] Semua konfigurasi disimpan ke NVS.");
+  } else if (cmd.name == "claw") {
+    // Usage: claw reset | claw OPEN_ANGLE | claw (tampilkan nilai)
+    if (line.endsWith(" reset")) {
+      cfg_claw_depan_min    = AngleClaw_Depan_MIN;
+      cfg_claw_depan_max    = AngleClaw_Depan_MAX;
+      cfg_claw_belakang_min = AngleClaw_Belakang_MIN;
+      cfg_claw_belakang_max = AngleClaw_Belakang_MAX;
+      saveConfigurations();
+      updateGripperConfigs();
+      Serial.printf("[Claw] Reset! open=%.1f close=%.1f (keduanya)\n",
+                    cfg_claw_depan_min, cfg_claw_depan_max);
+    } else if (cmd.args[0] > 0.0f) {
+      // claw ANGLE: set sudut buka kedua claw sekaligus
+      float openAng = argOr(cmd, 0, cfg_claw_depan_min);
+      cfg_claw_depan_min    = openAng;
+      cfg_claw_belakang_min = openAng;
+      saveConfigurations();
+      updateGripperConfigs();
+      Serial.printf("[Claw] Open angle -> %.1f deg (range buka = %.1f deg)\n",
+                    openAng, cfg_claw_depan_max - openAng);
+    } else {
+      Serial.printf("[Claw] Depan   : open=%.1f close=%.1f\n", cfg_claw_depan_min, cfg_claw_depan_max);
+      Serial.printf("[Claw] Belakang: open=%.1f close=%.1f\n", cfg_claw_belakang_min, cfg_claw_belakang_max);
+      Serial.println("Usage: claw reset | claw ANGLE");
+    }
+
   } else if (cmd.name == "field") {
     if (line.endsWith(" on")) {
       fieldCentricEnabled = true;
