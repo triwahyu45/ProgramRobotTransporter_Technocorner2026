@@ -614,8 +614,8 @@ int16_t percentToRawCommand(float percent) {
 void driveRobotRawPercent(float x, float y, float turn) {
   SpeedController().setEnabled(false);
   const WheelCommand mix = MixOmni4(percentToRawCommand(x), percentToRawCommand(y), percentToRawCommand(turn));
-  // Scale rear: 0.72 - user minta lebih cepat, naik dari 0.65. Yaw PID handle residual drift.
-  constexpr float REAR_SCALE = 0.72f;
+  // Scale rear: 0.65 - balance bagus, lurus oke. Yaw PID handle residual drift.
+  constexpr float REAR_SCALE = 0.65f;
   DriveAll(mix.fl, mix.fr,
            static_cast<int16_t>(mix.rl * REAR_SCALE),
            static_cast<int16_t>(mix.rr * REAR_SCALE));
@@ -1406,10 +1406,10 @@ void processGamepad(ControllerPtr ctl) {
   {
     static uint32_t nosHoldStartMs = 0;
     static bool nosBoostActive     = false;
-    constexpr float NOS_BASE_MULT  = 1.00f;   // default full → 67% flat (kenceng default)
-    constexpr float NOS_BOOST_MULT = 1.00f;   // NOS = tetap 67% (sudah dicap dari MAX_DRIVE)
-    constexpr float NOS_THRESHOLD  = 88.0f;   // % dianggap "stick mentok"
-    constexpr uint32_t NOS_HOLD_MS = 2000;    // tahan 2 detik untuk boost
+    constexpr float NOS_BASE_MULT  = 0.75f;  // normal = 75% → presisi & terkontrol
+    constexpr float NOS_BOOST_MULT = 1.00f;  // NOS = 100% full power (tahan stick mentok 2 detik)
+    constexpr float NOS_THRESHOLD  = 88.0f;  // % dianggap "stick mentok"
+    constexpr uint32_t NOS_HOLD_MS = 2000;   // tahan 2 detik untuk boost
 
     const float stickMag = sqrtf(moveX*moveX + moveY*moveY);
     if (stickMag > NOS_THRESHOLD) {
