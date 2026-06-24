@@ -859,11 +859,13 @@ void processGamepad(ControllerPtr ctl) {
       if (held >= 3000 && millis() - debL3 > 500) {
         clawCalibMode = !clawCalibMode; debL3 = millis(); holdActive = false;
         if (clawCalibMode) {
+          startGripperWiggle(2);  // 2 wiggle = masuk claw calib
           Serial.println("[ClawCalib] MODE ON!");
           Serial.println("  L1=R-open++ | L2=R-open-- | R1=F-open++ | R2=F-open--");
           Serial.println("  Share=save | L3+R3 3det=keluar");
         } else {
           saveConfigurations();
+          startGripperWiggle(3);  // 3 wiggle = keluar claw calib
           Serial.printf("[ClawCalib] OFF (saved) F:%.0f->%.0f R:%.0f->%.0f\n",
                         cfg_claw_depan_min, cfg_claw_depan_max,
                         cfg_claw_belakang_min, cfg_claw_belakang_max);
@@ -899,6 +901,7 @@ void processGamepad(ControllerPtr ctl) {
       // Share = save & keluar
       if (ctl->miscSelect() && millis() - debL3 > 500) {
         saveConfigurations(); clawCalibMode = false; debL3 = millis();
+        startGripperWiggle(3);  // 3 wiggle = save & keluar
         Serial.printf("[ClawCalib] SAVED! F:%.0f->%.0f R:%.0f->%.0f\n",
                       cfg_claw_depan_min, cfg_claw_depan_max,
                       cfg_claw_belakang_min, cfg_claw_belakang_max);
