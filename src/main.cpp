@@ -1104,7 +1104,7 @@ void processGamepad(ControllerPtr ctl) {
   const bool hasMove = moveX != 0.0f || moveY != 0.0f;
   const bool hasManualTurn = rotate != 0.0f;
 
-  if (!hasMove && !hasManualTurn) {
+  if (!hasMove && !hasManualTurn && !slowRotateActive) {
     if (lastManualTurn) {
       yawTargetDeg = imu.yawDeg;
       yawPid.reset();
@@ -1118,6 +1118,34 @@ void processGamepad(ControllerPtr ctl) {
   float xCommand = moveX * (MAX_DRIVE_PERCENT / 100.0f) * speedMultiplier;
   float yCommand = moveY * (MAX_DRIVE_PERCENT / 100.0f) * speedMultiplier;
   float turnCommand = 0.0f;
+
+  // ── NOS Speed Boost ─────────────────────────────────────────────────
+  // Normal: kecepatan dibatasi 60% untuk presisi & keamanan.
+  // Setelah stick mentok (>88%) selama 2 detik: boost ke 100% (NOS).
+  // Reset ke normal saat stick dilepas.
+  {
+    static uint32_t nosHoldStartMs = 0;
+    static bool nosBoostActive     = false;
+    constexpr float NOS_BASE_MULT  = 0.60f;   // 60% normal
+    constexpr float NOS_THRESHOLD  = 88.0f;   // % dianggap "stick mentok"
+    constexpr uint32_t NOS_HOLD_MS = 2000;    // tahan 2 detik untuk boost
+
+    const float stickMag = sqrtf(moveX*moveX + moveY*moveY);
+    if (stickMag > NOS_THRESHOLD) {
+      if (nosHoldStartMs == 0) nosHoldStartMs = millis();
+      if (!nosBoostActive && millis() - nosHoldStartMs > NOS_HOLD_MS) {
+        nosBoostActive = true;
+        Serial.println("[NOS] Speed boost ON! Full throttle.");
+      }
+    } else {
+      if (nosBoostActive) Serial.println("[NOS] Speed boost OFF.");
+      nosHoldStartMs = 0;
+      nosBoostActive = false;
+    }
+    const float nosMult = nosBoostActive ? 1.0f : NOS_BASE_MULT;
+    xCommand *= nosMult;
+    yCommand *= nosMult;
+  }
 
   applyFieldCentric(xCommand, yCommand, imu.yawDeg);
 
@@ -1310,12 +1338,16 @@ void handleCalibrationCommand(const String &line) {
 
   if (line.endsWith(" imu")) {
     Imu().startGyroCalibration();
+    calibLockActive = true;  // Kunci motor selama kalibrasi (safe mode)
+    Serial.println("[Calib] Motor dikunci. Robot harus DIAM selama kalibrasi!");
   } else if (line.endsWith(" enc")) {
     resetEncodersAndSpeedPid();
     Serial.println("Encoder counts and wheel PID reset.");
   } else if (line.endsWith(" all")) {
     resetEncodersAndSpeedPid();
     Imu().startGyroCalibration();
+    calibLockActive = true;  // Kunci motor selama kalibrasi
+    Serial.println("[Calib] Motor dikunci. Robot harus DIAM selama kalibrasi!");
   } else {
     Serial.println("Usage: calib imu | calib enc | calib all | calib ppr start [turns] | calib ppr stop");
   }
