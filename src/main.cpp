@@ -1239,8 +1239,8 @@ void processGamepad(ControllerPtr ctl) {
     // Front Lifter
     if (targetFront != lastTargetFront) {
       if (triggeredForward) {
-        servoLiftFront.setAngle(160.0f);  // anti-tip: 160°
-        Serial.printf("[Anti-Tip] Jatuh ke DEPAN! Pitch: %.1f. Lifter DEPAN -> 160 deg\n", imu.pitchDeg);
+        servoLiftFront.setAngle(170.0f);  // anti-tip: 170°
+        Serial.printf("[Anti-Tip] Jatuh ke DEPAN! Pitch: %.1f. Lifter DEPAN -> 170 deg\n", imu.pitchDeg);
       } else {
         gripperFront.setLifter(targetFront);
         Serial.printf("[Gripper] Depan lifter set ke: %s\n", targetFront == 0.0f ? "DOWN" : "UP");
@@ -1251,8 +1251,8 @@ void processGamepad(ControllerPtr ctl) {
     // Rear Lifter
     if (targetRear != lastTargetRear) {
       if (triggeredBackward) {
-        servoLiftRear.setAngle(160.0f);  // anti-tip: 160°
-        Serial.printf("[Anti-Tip] Jatuh ke BELAKANG! Pitch: %.1f. Lifter BELAKANG -> 160 deg\n", imu.pitchDeg);
+        servoLiftRear.setAngle(170.0f);  // anti-tip: 170°
+        Serial.printf("[Anti-Tip] Jatuh ke BELAKANG! Pitch: %.1f. Lifter BELAKANG -> 170 deg\n", imu.pitchDeg);
       } else {
         gripperRear.setLifter(targetRear);
         Serial.printf("[Gripper] Belakang lifter set ke: %s\n", targetRear == 0.0f ? "DOWN" : "UP");
