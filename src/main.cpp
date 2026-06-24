@@ -1615,14 +1615,25 @@ void loop() {
     server.handleClient();
   } else {
     BP32.update();
-    processGamepad(activeController);
 
-    // Fallback: saat tidak ada stick (ctl=nullptr), idleYawHoldOrBrake tidak terpanggil
-    // dari processGamepad. Panggil langsung agar heading serial command tetap bekerja.
     const bool noStick = (activeController == nullptr || !activeController->isConnected());
+    static bool safeModePrinted = false;
+
     if (noStick && !calibLockActive) {
-      const ImuTelemetry imu = Imu().telemetry();
-      idleYawHoldOrBrake(imu);
+      // ── SAFE MODE: no stick, not calibrating ────────────────────────────
+      // Motor mati, gripper ke posisi aman. Robot tidak bergerak sama sekali.
+      if (!safeModePrinted) {
+        Serial.println("[Safe] No controller – motor OFF, gripper SAFE.");
+        safeModePrinted = true;
+      }
+      if (!lastBrakeState) stopWithBrake();
+      // Gripper safe: claw tertutup (pegang barang), lifter posisi aman
+      gripperFront.setClaw(true);
+      gripperRear.setClaw(true);
+      yawPid.reset();
+    } else {
+      safeModePrinted = false;  // reset flag saat stick connect
+      processGamepad(activeController);
     }
 
     UpdateWheelSpeedController();
