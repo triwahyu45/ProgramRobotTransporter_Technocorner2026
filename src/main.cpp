@@ -25,7 +25,7 @@ constexpr int STICK_MAX = 512;
 constexpr float DPAD_MOVE_PERCENT = 40.0f;           // D-pad speed
 // Speed: open-loop, 55% PWM langsung ke ZK-5AD. Deadband FL=20%, FR=25%.
 // 55% = cukup cepat tanpa terlalu agresif. Kalau terlalu cepat, turunkan ke 45%.
-constexpr float MAX_DRIVE_PERCENT = 70.0f;
+constexpr float MAX_DRIVE_PERCENT = 67.0f;
 // Max rotasi manual (stick kanan di headingControlMode=false)
 constexpr float MAX_TURN_PERCENT = 20.0f;
 // Yaw correction: HARUS jauh di atas deadband FR=25%.
@@ -1400,8 +1400,8 @@ void processGamepad(ControllerPtr ctl) {
   {
     static uint32_t nosHoldStartMs = 0;
     static bool nosBoostActive     = false;
-    constexpr float NOS_BASE_MULT  = 0.90f;   // 90% normal → 70×0.90 = 63% (kenceng default)
-    constexpr float NOS_BOOST_MULT = 1.00f;   // 100% boost → 70% hard cap (terbatas)
+    constexpr float NOS_BASE_MULT  = 1.00f;   // default full → 67% flat (kenceng default)
+    constexpr float NOS_BOOST_MULT = 1.00f;   // NOS = tetap 67% (sudah dicap dari MAX_DRIVE)
     constexpr float NOS_THRESHOLD  = 88.0f;   // % dianggap "stick mentok"
     constexpr uint32_t NOS_HOLD_MS = 2000;    // tahan 2 detik untuk boost
 
@@ -1420,6 +1420,28 @@ void processGamepad(ControllerPtr ctl) {
     const float nosMult = nosBoostActive ? NOS_BOOST_MULT : NOS_BASE_MULT;
     xCommand *= nosMult;
     yCommand *= nosMult;
+  }
+
+  // ── Hill Assist: boost otomatis saat nanjak (pitch positif = depan naik) ──
+  // Kick in di 5°, full boost di 25°, max +30% extra power
+  constexpr float HILL_PITCH_START = 5.0f;
+  constexpr float HILL_PITCH_FULL  = 25.0f;
+  constexpr float HILL_MAX_BOOST   = 0.30f;  // +30% max saat full tanjakan
+  {
+    const float pitch = imu.ready ? imu.pitchDeg : 0.0f;
+    const float moveMag = sqrtf(moveX*moveX + moveY*moveY); // 0-100 range
+    if (pitch > HILL_PITCH_START && moveMag > 15.0f) {      // robot bergerak + nanjak
+      float factor = constrain((pitch - HILL_PITCH_START) / (HILL_PITCH_FULL - HILL_PITCH_START),
+                               0.0f, 1.0f);
+      float boost = 1.0f + HILL_MAX_BOOST * factor;
+      xCommand = constrain(xCommand * boost, -1.0f, 1.0f);
+      yCommand = constrain(yCommand * boost, -1.0f, 1.0f);
+      static uint32_t lastHillLog = 0;
+      if (millis() - lastHillLog > 500) {
+        Serial.printf("[Hill] pitch=%.1f° boost=x%.2f\n", pitch, boost);
+        lastHillLog = millis();
+      }
+    }
   }
 
   applyFieldCentric(xCommand, yCommand, imu.yawDeg);
