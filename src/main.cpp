@@ -1123,16 +1123,26 @@ void processGamepad(ControllerPtr ctl) {
     const bool l2 = triggerL2 > 0.1f;
     const bool r2 = triggerR2 > 0.1f;
 
-    // ── Slow rotate: trigger HELD + bumper/trigger LAIN = rotate ──────────
-    // L2 held → R1=kanan  R2=kiri  (L1=rear gripper)
-    // R2 held → L1=kiri   L2=kanan (R1=front gripper)
+    // ── Track trigger mana yang jadi BASE (pressed first) ─────────────────
+    // lifterBase: 0=none, 1=L2(rear), 2=R2(front)
+    static int8_t lifterBase = 0;
+    if (triggerL2 < 0.1f && triggerR2 < 0.1f) {
+      lifterBase = 0; // keduanya lepas, reset
+    } else if (lifterBase == 0) {
+      if      (triggerL2 > 0.3f) lifterBase = 1; // L2 ditekan duluan
+      else if (triggerR2 > 0.3f) lifterBase = 2; // R2 ditekan duluan
+    }
+    // Jika keduanya held, base tetap sesuai yang duluan ditekan
+
+    // ── Slow rotate: base trigger + bumper/trigger LAIN ───────────────────
+    // Base L2: R1=kanan, R2=kiri | Base R2: L1=kiri, L2=kanan
     constexpr float SLOW_ROT = 45.0f;
-    if (triggerL2 > 0.3f) {
-      if      (r1)  { slowRotateActive = true; slowRotateTurn = +SLOW_ROT; } // L2+R1 = kanan
-      else if (r2)  { slowRotateActive = true; slowRotateTurn = -SLOW_ROT; } // L2+R2 = kiri
-    } else if (triggerR2 > 0.3f) {
-      if      (l1)  { slowRotateActive = true; slowRotateTurn = -SLOW_ROT; } // R2+L1 = kiri
-      else if (l2)  { slowRotateActive = true; slowRotateTurn = +SLOW_ROT; } // R2+L2 = kanan
+    if (lifterBase == 1) {           // L2 adalah base (rear lifter)
+      if      (r1) { slowRotateActive = true; slowRotateTurn = +SLOW_ROT; } // L2+R1 = kanan
+      else if (r2) { slowRotateActive = true; slowRotateTurn = -SLOW_ROT; } // L2+R2 = kiri
+    } else if (lifterBase == 2) {    // R2 adalah base (front lifter)
+      if      (l1) { slowRotateActive = true; slowRotateTurn = -SLOW_ROT; } // R2+L1 = kiri
+      else if (l2) { slowRotateActive = true; slowRotateTurn = +SLOW_ROT; } // R2+L2 = kanan
     }
 
     // Jika tidak ada stik terhubung, paksa claw tutup
@@ -1144,8 +1154,7 @@ void processGamepad(ControllerPtr ctl) {
     // R1: toggle claw depan — SKIP jika sedang calib mode atau slow rotate
     if (r1 && !lastR1 && !calibCombo && !slowRotateActive && robotMode == MODE_NORMAL) {
       gripperFront.toggleClaw();
-      Serial.printf("[Gripper] Depan claw: %s\n",
-                    gripperFront.isClawClosed() ? "CLOSE" : "OPEN");
+      Serial.printf("[Gripper] Depan claw: %s\n", gripperFront.isClawClosed() ? "CLOSE" : "OPEN");
     }
     // L1: toggle claw belakang — SKIP jika sedang calib mode atau slow rotate
     if (l1 && !lastL1 && !calibCombo && !slowRotateActive && robotMode == MODE_NORMAL) {
@@ -1154,13 +1163,18 @@ void processGamepad(ControllerPtr ctl) {
                     gripperRear.isClawClosed() ? "CLOSE" : "OPEN");
     }
 
-    // Target awal berdasarkan trigger stik (UP = 1.0f, DOWN = 0.0f)
-    // R2 = lifter depan, L2 = lifter belakang (ditukar dari sebelumnya)
-    // Jika slow rotate aktif dan L2 dipakai untuk rotasi, rear lifter tetap naik
-    // Front lifter: turun jika R2 ditekan, KECUALI L2 sedang held (L2+R2 = rotate kiri, bukan lifter)
-    float targetFront = (ctl && ctl->isConnected() && !(triggerL2 > 0.3f && r2)) ? (1.0f - triggerR2) : 1.0f;
-    // Rear lifter: SELALU ikut L2 — tidak pernah dioverride oleh R2
-    float targetRear  = ctl && ctl->isConnected() ? (1.0f - triggerL2) : 1.0f;
+    // ── Lifter targets berdasarkan BASE ───────────────────────────────────
+    float targetFront, targetRear;
+    if (lifterBase == 1) {
+      targetRear  = 1.0f - triggerL2; // rear turun (L2 base)
+      targetFront = 1.0f;             // front naik (R2 = rotate modifier)
+    } else if (lifterBase == 2) {
+      targetFront = 1.0f - triggerR2; // front turun (R2 base)
+      targetRear  = 1.0f;             // rear naik (L2 = rotate modifier)
+    } else {
+      targetFront = ctl && ctl->isConnected() ? (1.0f - triggerR2) : 1.0f;
+      targetRear  = ctl && ctl->isConnected() ? (1.0f - triggerL2) : 1.0f;
+    }
 
     // Membaca kemiringan (pitch & roll) dari MPU6050
     const ImuTelemetry imu = Imu().telemetry();
