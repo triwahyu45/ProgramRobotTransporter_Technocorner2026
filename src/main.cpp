@@ -36,7 +36,7 @@ constexpr float MAX_YAW_CORRECTION_PERCENT = 75.0f;  // naik 65->75: lebih respo
 // Deadband 3°: stop koreksi kecil di bawah batas drift IMU.
 // YAW_MIN_CORRECTION: snap output ke minimum ini agar motor PASTI bergerak (motor deadband ~25%).
 // Efek: robot hold heading kuat, error >3° selalu dikoreksi dengan MINIMUM 28% power.
-constexpr float YAW_HOLD_DEADBAND_DEG      = 2.0f;   // lebih presisi (was 3.0)
+constexpr float YAW_HOLD_DEADBAND_DEG      = 2.5f;   // lebih lebar = kurangi osilasi near target (was 2.0)
 constexpr float YAW_MIN_CORRECTION_PERCENT  = 35.0f;  // snap min: lebih dari deadband motor (was 28)
 constexpr bool  IDLE_YAW_HOLD_ENABLED_DEFAULT = true;
 constexpr float IDLE_YAW_MAX_TURN_PERCENT   = 70.0f;  // naik 60->70: lebih responsif
@@ -588,13 +588,10 @@ void idleYawHoldOrBrake(const ImuTelemetry &imu) {
   const float rawTurn =
       constrain(yawPidUpdate(yawTargetDeg, imu.yawDeg, imu.gyroZ),
                 -IDLE_YAW_MAX_TURN_PERCENT, IDLE_YAW_MAX_TURN_PERCENT);
-  // Graduated snap: dekat target (|err|<5deg) jangan snap biar tidak osilasi!
-  // Jauh dari target: snap kuat agar motor pasti bergerak.
-  const float snapMin = (fabsf(errorDeg) < 5.0f)  ? 0.0f               // dekat: bebas
-                      : (fabsf(errorDeg) < 12.0f) ? 25.0f              // medium: snap ringan
-                                                   : YAW_MIN_CORRECTION_PERCENT; // jauh: snap penuh
-  const float turnCommand = (fabsf(rawTurn) > 0.5f && fabsf(rawTurn) < snapMin)
-      ? copysignf(snapMin, rawTurn)
+  // Snap: jika output < deadband motor, snap ke minimum agar motor PASTI bergerak.
+  // Tidak pakai graduated snap: motor butuh min ~25% untuk bergerak, berapapun errornya.
+  const float turnCommand = (fabsf(rawTurn) > 0.5f && fabsf(rawTurn) < YAW_MIN_CORRECTION_PERCENT)
+      ? copysignf(YAW_MIN_CORRECTION_PERCENT, rawTurn)
       : rawTurn;
   driveRobot(0.0f, 0.0f, turnCommand);
 }
@@ -1110,13 +1107,9 @@ void processGamepad(ControllerPtr ctl) {
       yawPidUpdate(yawTargetDeg, imu.yawDeg, imu.gyroZ) * speedMultiplier,
       -MAX_YAW_CORRECTION_PERCENT, MAX_YAW_CORRECTION_PERCENT
     );
-    // Graduated snap (sama): dekat target = bebas osilasi, jauh = snap kuat
-    const float errNow = wrap180(yawTargetDeg - imu.yawDeg);
-    const float snapMinDrv = (fabsf(errNow) < 5.0f)  ? 0.0f
-                           : (fabsf(errNow) < 12.0f) ? 25.0f
-                                                      : YAW_MIN_CORRECTION_PERCENT;
-    turnCommand = (fabsf(rawYaw) > 0.5f && fabsf(rawYaw) < snapMinDrv)
-        ? copysignf(snapMinDrv, rawYaw)
+    // Snap: selalu pastikan output di atas motor deadband
+    turnCommand = (fabsf(rawYaw) > 0.5f && fabsf(rawYaw) < YAW_MIN_CORRECTION_PERCENT)
+        ? copysignf(YAW_MIN_CORRECTION_PERCENT, rawYaw)
         : rawYaw;
   }
 
