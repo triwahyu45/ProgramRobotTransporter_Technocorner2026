@@ -23,20 +23,27 @@ constexpr uint32_t SERIAL_LINE_TIMEOUT_MS = 80;
 constexpr int STICK_DEADZONE = 120;  // dinaikkan dari 60: stick drift bikin FR+RL jalan sendiri
 constexpr int STICK_MAX = 512;
 constexpr float DPAD_MOVE_PERCENT = 40.0f;           // D-pad speed
-constexpr float MAX_DRIVE_PERCENT = 40.0f;           // 40% × 80 RPM = 32 RPM target, FL mampu (max 55)
-constexpr float MAX_TURN_PERCENT = 25.0f;            // Max rotasi manual
-constexpr float MAX_YAW_CORRECTION_PERCENT = 28.0f; // Harus > deadband FR (26%) agar koreksi bisa gerak
-constexpr bool IDLE_YAW_HOLD_ENABLED_DEFAULT = false;  // disable dulu: IMU drift bikin motor jalan sendiri
-constexpr float YAW_HOLD_DEADBAND_DEG = 3.0f;           // deadband lebih besar biar gak sensitif
-constexpr float IDLE_YAW_MAX_TURN_PERCENT = 22.0f;      // harus > deadband motor (FL=18%, FR=26%)
+// Speed: open-loop, 55% PWM langsung ke ZK-5AD. Deadband FL=20%, FR=25%.
+// 55% = cukup cepat tanpa terlalu agresif. Kalau terlalu cepat, turunkan ke 45%.
+constexpr float MAX_DRIVE_PERCENT = 55.0f;
+// Max rotasi manual (stick kanan di headingControlMode=false)
+constexpr float MAX_TURN_PERCENT = 42.0f;
+// Yaw correction: HARUS jauh di atas deadband FR=25%. 42% → ada margin 17%.
+// Dulu 28% terlalu tipis → PID membunuh koreksi (motor barely move di 28%).
+constexpr float MAX_YAW_CORRECTION_PERCENT = 42.0f;
+constexpr bool IDLE_YAW_HOLD_ENABLED_DEFAULT = false;  // yawidle on via serial untuk aktifkan
+constexpr float YAW_HOLD_DEADBAND_DEG = 2.5f;
+constexpr float IDLE_YAW_MAX_TURN_PERCENT = 38.0f;     // > deadband FR=25%, margin aman
 constexpr bool INVERT_MOVE_X = false;
 constexpr bool INVERT_MOVE_Y = true;
 constexpr bool INVERT_ROTATE = false;
 constexpr bool YAW_CORRECTION_INVERTED_DEFAULT = true;
-// DRIVE_CLOSED_LOOP_DEFAULT: setelah channel mapping fix (2026-06-24), encoder FL/FR reliable.
-// RL/RR pakai feed-forward only (GPIO 34/35/36/39 = input-only, noise prone).
-// WheelSpeedController.computeCommand() otomatis handle via flag hasEncoder per-wheel.
-constexpr bool DRIVE_CLOSED_LOOP_DEFAULT = true;
+// DRIVE_CLOSED_LOOP: DEFAULT = false (open-loop) karena motor ZK-5AD punya respons non-linear.
+// Di RPM rendah (<50% PWM), actual RPM JAUH lebih tinggi dari prediksi linear feedforward.
+// Akibat: PID error besar → correction -10000 raw → command turun ke deadband → robot berhenti!
+// Open-loop: raw PWM langsung dari joystick, tanpa RPM targeting. Lebih andal untuk kompetisi.
+// Untuk enable closed-loop: serial command 'drive closed'
+constexpr bool DRIVE_CLOSED_LOOP_DEFAULT = false;
 constexpr bool RESET_BLUETOOTH_PAIRING_ON_BOOT = false;
 
 struct YawPid {

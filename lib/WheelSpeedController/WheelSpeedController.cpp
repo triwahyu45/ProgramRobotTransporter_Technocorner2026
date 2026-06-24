@@ -5,19 +5,19 @@
 
 namespace {
 constexpr uint32_t CONTROL_PERIOD_US = 20000;  // 50 Hz control loop
-constexpr float KP = 25.0f;    // Lower than original → less aggressive with accurate feedforward
-constexpr float KI = 6.0f;     // Lower → slow integrator, avoid windup
-constexpr float INTEGRAL_LIMIT = 6000.0f;
-// RPM_FAULT_LIMIT: cukup tinggi agar noise EMI pada RL/RR (GPIO 34-39) tidak false-fault.
-// RL max RPM=108, RR max RPM=110. Noise bisa mencapai 200-400 RPM palsu.
-// FL/FR max=55, noise jauh lebih kecil karena GPIO 16/17/25/26 ada pull-up internal.
-constexpr float RPM_FAULT_LIMIT = 450.0f;  // Tinggi agar tidak false-fault dari EMI
-constexpr float RPM_DEADBAND = 1.5f;  // Sedikit lebih tinggi dari original agar tidak buzz
+// KP rendah karena motor ZK-5AD non-linear: actual RPM >> predicted di PWM rendah.
+// KP=3: koreksi halus, tidak membunuh feed-forward.
+constexpr float KP = 3.0f;
+// KI=0: integrator dimatikan. Integral windup menyebabkan robot tidak mau mulai bergerak.
+constexpr float KI = 0.0f;
+constexpr float INTEGRAL_LIMIT = 0.0f;
+// RPM_FAULT_LIMIT: RL/RR max RPM = 2816 (dari kalibrasi 2026-06-24). Pakai 5000 sbg batas.
+// Sebelumnya 450 → terlalu rendah, langsung false-fault untuk RL/RR yang bisa 2800+ RPM.
+constexpr float RPM_FAULT_LIMIT = 5000.0f;
+constexpr float RPM_DEADBAND = 1.5f;
 constexpr int16_t MAX_COMMAND = 32767;
-// Re-enable semua encoder untuk ramp test / kalibrasi.
-// Jika setelah test terbukti RL/RR noise, ubah ke false untuk kompetisi.
-constexpr bool ENCODER_RL_ENABLED = true;   // test dulu: GPIO 34/35, bisa ada external pull-up
-constexpr bool ENCODER_RR_ENABLED = true;   // test dulu: GPIO 36/39
+constexpr bool ENCODER_RL_ENABLED = true;
+constexpr bool ENCODER_RR_ENABLED = true;
 
 WheelSpeedController speedController;
 
@@ -123,8 +123,10 @@ void WheelSpeedController::update(uint32_t nowUs) {
 
   const float dtSec = static_cast<float>(elapsedUs) / 1000000.0f;
   
-  // Acceleration limit (slew rate limiter) — lebih pelan = lebih smooth
-  constexpr float MAX_ACCEL_RPM_PER_SEC = 120.0f;  // Turun dari 250 → 3x lebih smooth
+  // Acceleration limit (slew rate limiter)
+  // 800 RPM/s: dengan target 504 RPM butuh 0.6s, lebih responsif untuk kompetisi.
+  // Sebelumnya 120 RPM/s = butuh 4 detik! Robot hampir tidak gerak.
+  constexpr float MAX_ACCEL_RPM_PER_SEC = 800.0f;
   const float maxChange = MAX_ACCEL_RPM_PER_SEC * dtSec;
 
   for (uint8_t wheel = 0; wheel < WHEEL_COUNT; ++wheel) {

@@ -42,7 +42,7 @@
 // Max wheel RPM — roda depan vs belakang punya gearbox beda rasio.
 // Ramp calibration 2026-06-24: FL=1273, FR=1254, RL=2806, RR=2816 RPM @ 100% PWM
 // Bottleneck = FR (1254 RPM). Pakai 1260 sebagai ceiling WheelSpeedController.
-#define MAX_WHEEL_RPM           1260.0f  // ceiling: limited by FR front wheel
+#define MAX_WHEEL_RPM           1263.0f  // ceiling: limited by FR front wheel
 #define MAX_WHEEL_RPM_FRONT     1260.0f  // FL=1273, FR=1254 → pakai 1260
 #define MAX_WHEEL_RPM_REAR      2815.0f  // RL=2806, RR=2816 → pakai 2815
 
@@ -51,19 +51,19 @@
 // Hasil ramp calibration 2026-06-24 (ZK-5AD channel fix, 12V, kosong):
 //   FL deadband 19.8% (raw=6500), FR 24.4% (raw=8000)
 //   RL deadband 19.8% (raw=6500), RR 24.4% (raw=8000)
-#define MOTOR_MIN_PWM_FL        20.0f   // ramp test 2026-06-24: 19.8%
-#define MOTOR_MIN_PWM_FR        25.0f   // ramp test 2026-06-24: 24.4%
-#define MOTOR_MIN_PWM_RL        20.0f   // ramp test 2026-06-24: 19.8%
-#define MOTOR_MIN_PWM_RR        25.0f   // ramp test 2026-06-24: 24.4%
+#define MOTOR_MIN_PWM_FL        18.3f   // ramp test 2026-06-24: 19.8%
+#define MOTOR_MIN_PWM_FR        22.9f   // ramp test 2026-06-24: 24.4%
+#define MOTOR_MIN_PWM_RL        19.8f   // ramp test 2026-06-24: 19.8%
+#define MOTOR_MIN_PWM_RR        22.9f   // ramp test 2026-06-24: 24.4%
 
 // Ramp calibration 2026-06-24 (ZK-5AD channel mapping fix):
 //   FL: 1273 RPM @ 100%, FR: 1254 RPM @ 100%
 //   RL: 2806 RPM @ 100%, RR: 2816 RPM @ 100%
 // Rasio RL/FL = 2806/1273 = 2.21x → sesuai rasio gearbox depan (lebih torsi, lebih lambat)
-#define MOTOR_MAX_RPM_FL        1280.0f  // ramp test 2026-06-24
-#define MOTOR_MAX_RPM_FR        1260.0f  // ramp test 2026-06-24
-#define MOTOR_MAX_RPM_RL        2810.0f  // ramp test 2026-06-24
-#define MOTOR_MAX_RPM_RR        2820.0f  // ramp test 2026-06-24
+#define MOTOR_MAX_RPM_FL        1275.0f  // ramp test 2026-06-24
+#define MOTOR_MAX_RPM_FR        1263.0f  // ramp test 2026-06-24
+#define MOTOR_MAX_RPM_RL        2817.0f  // ramp test 2026-06-24
+#define MOTOR_MAX_RPM_RR        2832.0f  // ramp test 2026-06-24
 
 // !! PERHATIAN - ENCODER GPIO LIMITATIONS:
 // FL (GPIO 16/17) dan FR (GPIO 25/26): punya internal pull-up → RELIABLE
