@@ -832,6 +832,72 @@ void processGamepad(ControllerPtr ctl) {
   bool slowRotateActive = false;
   float slowRotateTurn  = 0.0f;
 
+  // ─── Claw Calibration Mode via Gamepad ────────────────────────────────────
+  // Toggle: tekan L3 (stick kiri klik)
+  // L1 tahan = belakang open +1°  |  L2 tahan = belakang open -1°
+  // R1 tahan = depan    open +1°  |  R2 tahan = depan    open -1°
+  // Share (kotak kiri) = save & keluar
+  {
+    static bool     clawCalibMode = false;
+    static uint32_t debL3         = 0;
+    static uint32_t tickMs        = 0;
+    static uint32_t printMs       = 0;
+
+    const bool hasCtl = ctl && ctl->isConnected();
+    const bool l3btn  = hasCtl && ctl->thumbL();
+
+    // Toggle L3
+    if (l3btn && millis() - debL3 > 600) {
+      clawCalibMode = !clawCalibMode; debL3 = millis();
+      if (clawCalibMode) {
+        Serial.println("[ClawCalib] MODE ON!");
+        Serial.println("  L1=R-open++ | L2=R-open-- | R1=F-open++ | R2=F-open--");
+        Serial.println("  Share=save&keluar");
+      } else {
+        saveConfigurations();
+        Serial.printf("[ClawCalib] OFF (saved) F:%.0f->%.0f R:%.0f->%.0f\n",
+                      cfg_claw_depan_min, cfg_claw_depan_max,
+                      cfg_claw_belakang_min, cfg_claw_belakang_max);
+      }
+    }
+
+    if (clawCalibMode && hasCtl) {
+      const bool l1b  = ctl->l1();
+      const bool r1b  = ctl->r1();
+      const float tL2 = (float)ctl->brake()    / 1023.0f;
+      const float tR2 = (float)ctl->throttle() / 1023.0f;
+
+      // Tick 100ms: tambah/kurang 1 derajat
+      if (millis() - tickMs > 100) {
+        bool changed = false;
+        if (l1b)       { cfg_claw_belakang_min = constrain(cfg_claw_belakang_min - 1.0f, 0.0f, 179.0f); gripperRear.setClaw(false);  changed = true; }
+        if (tL2 > 0.3f){ cfg_claw_belakang_min = constrain(cfg_claw_belakang_min + 1.0f, 1.0f, 180.0f); gripperRear.setClaw(false);  changed = true; }
+        if (r1b)       { cfg_claw_depan_min    = constrain(cfg_claw_depan_min    - 1.0f, 0.0f, 179.0f); gripperFront.setClaw(false); changed = true; }
+        if (tR2 > 0.3f){ cfg_claw_depan_min    = constrain(cfg_claw_depan_min    + 1.0f, 1.0f, 180.0f); gripperFront.setClaw(false); changed = true; }
+        if (changed) { updateGripperConfigs(); tickMs = millis(); }
+      }
+
+      // Print tiap 300ms
+      if (millis() - printMs > 300) {
+        printMs = millis();
+        Serial.printf("[ClawCalib] F-open=%.0f R-open=%.0f\n",
+                      cfg_claw_depan_min, cfg_claw_belakang_min);
+      }
+
+      // Share = save & keluar
+      if (ctl->miscSelect() && millis() - debL3 > 500) {
+        saveConfigurations(); clawCalibMode = false; debL3 = millis();
+        Serial.printf("[ClawCalib] SAVED! F:%.0f->%.0f R:%.0f->%.0f\n",
+                      cfg_claw_depan_min, cfg_claw_depan_max,
+                      cfg_claw_belakang_min, cfg_claw_belakang_max);
+      }
+
+      stopWithBrake(); return;  // Motor stop saat calib mode
+    }
+  }
+
+
+
   // ─── Gripper diupdate SELALU, bahkan saat calibrating / disconnect ───
   {
     // Baca state tombol (false kalau tidak ada controller)
@@ -1429,11 +1495,23 @@ void handleCommand(String line) {
       saveConfigurations(); updateGripperConfigs();
       Serial.printf("[Claw] Reset! open=%.1f close=%.1f\n", cfg_claw_depan_min, cfg_claw_depan_max);
     } else if (line.startsWith("claw open ") || line.startsWith("claw o ")) {
-      // claw open ANGLE — buka kedua claw
       float ang = argOr(cmd, 1, cfg_claw_depan_min);
       cfg_claw_depan_min = cfg_claw_belakang_min = ang;
       saveConfigurations(); updateGripperConfigs();
-      Serial.printf("[Claw] Open -> %.1f deg (range %.1f)\n", ang, cfg_claw_depan_max - ang);
+      Serial.printf("[Claw] Open keduanya -> %.1f deg\n", ang);
+    } else if (line.startsWith("claw r open ") || line.startsWith("claw r o ")) {
+      // claw r open ANGLE — open belakang saja
+      float ang = argOr(cmd, 2, cfg_claw_belakang_min);
+      cfg_claw_belakang_min = ang;
+      saveConfigurations(); updateGripperConfigs();
+      Serial.printf("[Claw] Belakang open -> %.1f deg (range %.1f)\n", ang, cfg_claw_belakang_max - ang);
+    } else if (line.startsWith("claw f open ") || line.startsWith("claw f o ")) {
+      // claw f open ANGLE — open depan saja
+      float ang = argOr(cmd, 2, cfg_claw_depan_min);
+      cfg_claw_depan_min = ang;
+      saveConfigurations(); updateGripperConfigs();
+      Serial.printf("[Claw] Depan open -> %.1f deg (range %.1f)\n", ang, cfg_claw_depan_max - ang);
+
     } else if (line.startsWith("claw close ") || line.startsWith("claw c ")) {
       // claw close ANGLE — tutup kedua claw (grip lebih kuat)
       float ang = argOr(cmd, 1, cfg_claw_depan_max);
