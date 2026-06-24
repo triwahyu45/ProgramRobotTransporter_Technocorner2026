@@ -850,25 +850,24 @@ void processGamepad(ControllerPtr ctl) {
     const bool l2 = triggerL2 > 0.1f;
     const bool r2 = triggerR2 > 0.1f;
 
-    // ── Slow rotate modifier: lifter trigger + bumper ─────────────────────
-    // R2 ditekan (front lifter): L1=CCW pelan, L2=CW pelan (L2 override rear lifter)
-    // L2 ditekan (rear lifter):  R1=CW pelan
-    // Speed pelan 25% — untuk fine positioning saat operasi gripper
+    // ── Slow rotate modifier: lifter trigger + bumper/trigger ─────────────
+    // R2 held (front lifter) : L1 = kiri (CCW), L2 = kanan (CW)
+    // L2 held (rear lifter)  : R1 = kanan (CW), R2 = kiri (CCW)  <- sebaliknya/mirror
     constexpr float SLOW_ROT = 35.0f;
-    if (triggerR2 > 0.3f) {
-      if (l1) {
-        slowRotateActive = true;
-        slowRotateTurn   = -SLOW_ROT;  // CCW
-      } else if (triggerL2 > 0.3f) {
-        slowRotateActive = true;
-        slowRotateTurn   = +SLOW_ROT;  // CW
-      }
-    } else if (triggerL2 > 0.3f) {
-      if (r1) {
-        slowRotateActive = true;
-        slowRotateTurn   = +SLOW_ROT;  // CW
-      }
+    if (triggerR2 > 0.3f && triggerL2 <= 0.3f) {
+      // R2 ONLY modifier
+      if (l1) { slowRotateActive=true; slowRotateTurn=-SLOW_ROT; }       // kiri
+      else if (l2) { slowRotateActive=true; slowRotateTurn=+SLOW_ROT; }  // kanan
+    } else if (triggerL2 > 0.3f && triggerR2 <= 0.3f) {
+      // L2 ONLY modifier (sebaliknya)
+      if (r1) { slowRotateActive=true; slowRotateTurn=+SLOW_ROT; }       // kanan
+      else if (r2) { slowRotateActive=true; slowRotateTurn=-SLOW_ROT; }  // kiri
+    } else if (triggerR2 > 0.3f && triggerL2 > 0.3f) {
+      // Kedua trigger: R2 modifier, L2 side controls rotation
+      if (l1) { slowRotateActive=true; slowRotateTurn=-SLOW_ROT; }  // kiri
+      else     { slowRotateActive=true; slowRotateTurn=+SLOW_ROT; } // kanan
     }
+
 
     // Jika tidak ada stik terhubung (termasuk saat awal menyala), paksa claw tutup dan lifter naik
     if (ctl == nullptr || !ctl->isConnected()) {
