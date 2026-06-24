@@ -1272,7 +1272,7 @@ void processGamepad(ControllerPtr ctl) {
     // paksa KEDUA lifter naik ke 160° agar tidak kepentok permukaan tanjakan.
     // Saat kembali flat → lifter kembali normal (trigger-controlled).
     {
-      constexpr float HILL_LIFT_PITCH_MIN = 10.0f;   // miring > 10° → aktifkan
+      constexpr float HILL_LIFT_PITCH_MIN = 15.0f;   // miring > 15° → aktifkan (was 10° terlalu sensitif)
       constexpr float HILL_LIFT_ANGLE     = 160.0f;  // servo angle saat di tanjakan
 
       const bool onHill = imu.ready && !Imu().isCalibrating()
