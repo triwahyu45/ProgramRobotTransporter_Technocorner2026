@@ -894,8 +894,8 @@ void processGamepad(ControllerPtr ctl) {
                       cfg_claw_depan_min, cfg_claw_belakang_min);
       }
 
-      // Share = save & keluar (tapi bukan saat calibBtn aktif = Triangle+Share toggling)
-      if (ctl->miscSelect() && !ctl->y() && millis() - debMs > 500) {
+      // Share (tanpa △) = save & keluar — debounce 3det biar wiggle masuk selesai dulu
+      if (ctl->miscSelect() && !ctl->y() && millis() - debMs > 3000) {
         saveConfigurations(); clawCalibMode = false; debMs = millis();
         startGripperWiggle(3);
         Serial.printf("[ClawCalib] SAVED! F:%.0f->%.0f R:%.0f->%.0f\n",
@@ -909,7 +909,7 @@ void processGamepad(ControllerPtr ctl) {
         uint32_t held = millis() - holdStartMs;
         if (held >= 1000 && held < 1100) Serial.println("[ClawCalib] Tahan 2 detik lagi untuk keluar...");
         if (held >= 2000 && held < 2100) Serial.println("[ClawCalib] Tahan 1 detik lagi untuk keluar...");
-        if (held >= 3000 && millis() - debMs > 500) {
+        if (held >= 3000 && millis() - debMs > 3000) {
           saveConfigurations(); clawCalibMode = false; debMs = millis(); holdActive = false;
           startGripperWiggle(3);
           Serial.printf("[ClawCalib] OFF+SAVED F:%.0f->%.0f R:%.0f->%.0f\n",
