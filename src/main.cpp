@@ -29,14 +29,14 @@ constexpr float MAX_DRIVE_PERCENT = 55.0f;
 // Max rotasi manual (stick kanan di headingControlMode=false)
 constexpr float MAX_TURN_PERCENT = 42.0f;
 // Yaw correction: HARUS jauh di atas deadband FR=25%.
-// Terlalu kencang -> kurangi nilai ini. Terlalu lemah -> naikkan.
-constexpr float MAX_YAW_CORRECTION_PERCENT = 27.0f;
+// Terlalu kencang -> kurangi. Terlalu lemah -> naikkan. Osilasi -> turunkan KP di struct YawPid.
+constexpr float MAX_YAW_CORRECTION_PERCENT = 29.0f;
 // IDLE_YAW_HOLD: aktifkan agar right stick bisa aim bahkan saat robot diam.
 // Saat idle + right stick arah kanan → robot rotate ke kanan & hold.
 // Deadband 3° mencegah IMU drift kecil memicu motor terus-menerus.
 constexpr bool IDLE_YAW_HOLD_ENABLED_DEFAULT = true;
 constexpr float YAW_HOLD_DEADBAND_DEG = 3.0f;
-constexpr float IDLE_YAW_MAX_TURN_PERCENT = 27.0f;     // > deadband FR=25%, smooth
+constexpr float IDLE_YAW_MAX_TURN_PERCENT = 29.0f;
 constexpr bool INVERT_MOVE_X = false;
 constexpr bool INVERT_MOVE_Y = true;
 constexpr bool INVERT_ROTATE = false;
@@ -51,9 +51,9 @@ constexpr bool DRIVE_CLOSED_LOOP_DEFAULT = false;
 constexpr bool RESET_BLUETOOTH_PAIRING_ON_BOOT = false;
 
 struct YawPid {
-  float kp = 1.15f;
+  float kp = 0.85f;   // turun dari 1.15 -> kurangi osilasi
   float ki = 0.0f;
-  float kd = 0.035f;
+  float kd = 0.06f;   // naik dari 0.035 -> damping lebih kuat
   float integral = 0.0f;
   uint32_t lastUs = 0;
 
