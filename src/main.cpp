@@ -36,7 +36,7 @@ constexpr float MAX_YAW_CORRECTION_PERCENT = 45.0f;  // DRIVING: batas saat gera
 // Deadband 3°: stop koreksi kecil di bawah batas drift IMU.
 // YAW_MIN_CORRECTION: snap output ke minimum ini agar motor PASTI bergerak (motor deadband ~25%).
 // Efek: robot hold heading kuat, error >3° selalu dikoreksi dengan MINIMUM 28% power.
-constexpr float YAW_HOLD_DEADBAND_DEG      = 2.5f;   // lebih lebar = kurangi osilasi near target (was 2.0)
+constexpr float YAW_HOLD_DEADBAND_DEG      = 1.5f;   // lock angle: koreksi mulai dari 1.5deg
 constexpr float YAW_MIN_CORRECTION_PERCENT  = 35.0f;  // snap min: lebih dari deadband motor (was 28)
 constexpr bool  IDLE_YAW_HOLD_ENABLED_DEFAULT = true;
 constexpr float IDLE_YAW_MAX_TURN_PERCENT   = 100.0f; // IDLE: full speed snap (robot diam)
@@ -827,6 +827,11 @@ void processGamepad(ControllerPtr ctl) {
     }
   }
 
+  // Slow rotate modifier: lifter trigger + bumper = fine rotation
+  // Set inside gripper block, dipakai di movement block.
+  bool slowRotateActive = false;
+  float slowRotateTurn  = 0.0f;
+
   // ─── Gripper diupdate SELALU, bahkan saat calibrating / disconnect ───
   {
     // Baca state tombol (false kalau tidak ada controller)
@@ -845,6 +850,26 @@ void processGamepad(ControllerPtr ctl) {
     const bool l2 = triggerL2 > 0.1f;
     const bool r2 = triggerR2 > 0.1f;
 
+    // ── Slow rotate modifier: lifter trigger + bumper ─────────────────────
+    // R2 ditekan (front lifter): L1=CCW pelan, L2=CW pelan (L2 override rear lifter)
+    // L2 ditekan (rear lifter):  R1=CW pelan
+    // Speed pelan 25% — untuk fine positioning saat operasi gripper
+    constexpr float SLOW_ROT = 25.0f;
+    if (triggerR2 > 0.3f) {
+      if (l1) {
+        slowRotateActive = true;
+        slowRotateTurn   = -SLOW_ROT;  // CCW
+      } else if (triggerL2 > 0.3f) {
+        slowRotateActive = true;
+        slowRotateTurn   = +SLOW_ROT;  // CW
+      }
+    } else if (triggerL2 > 0.3f) {
+      if (r1) {
+        slowRotateActive = true;
+        slowRotateTurn   = +SLOW_ROT;  // CW
+      }
+    }
+
     // Jika tidak ada stik terhubung (termasuk saat awal menyala), paksa claw tutup dan lifter naik
     if (ctl == nullptr || !ctl->isConnected()) {
       if (!gripperFront.isClawClosed()) {
@@ -858,22 +883,24 @@ void processGamepad(ControllerPtr ctl) {
       // (setLifter diserahkan ke logika dinamis di bawah)
     }
 
-    // L1: toggle claw depan — SKIP jika sedang hold calib combo
-    if (l1 && !lastL1 && !calibCombo) {
+    // R1: toggle claw depan — SKIP jika sedang hold calib combo atau slow rotate
+    if (r1 && !lastR1 && !calibCombo && !slowRotateActive) {
       gripperFront.toggleClaw();
       Serial.printf("[Gripper] Depan claw: %s\n",
                     gripperFront.isClawClosed() ? "CLOSE" : "OPEN");
     }
-    // R1: toggle claw belakang — SKIP jika sedang hold calib combo
-    if (r1 && !lastR1 && !calibCombo) {
+    // L1: toggle claw belakang — SKIP jika sedang hold calib combo atau slow rotate
+    if (l1 && !lastL1 && !calibCombo && !slowRotateActive) {
       gripperRear.toggleClaw();
       Serial.printf("[Gripper] Belakang claw: %s\n",
                     gripperRear.isClawClosed() ? "CLOSE" : "OPEN");
     }
 
     // Target awal berdasarkan trigger stik (UP = 1.0f, DOWN = 0.0f)
-    float targetFront = ctl && ctl->isConnected() ? (1.0f - triggerL2) : 1.0f;
-    float targetRear  = ctl && ctl->isConnected() ? (1.0f - triggerR2) : 1.0f;
+    // R2 = lifter depan, L2 = lifter belakang (ditukar dari sebelumnya)
+    // Jika slow rotate aktif dan L2 dipakai untuk rotasi, rear lifter tetap naik
+    float targetFront = ctl && ctl->isConnected() ? (1.0f - triggerR2) : 1.0f;
+    float targetRear  = (ctl && ctl->isConnected() && !slowRotateActive) ? (1.0f - triggerL2) : 1.0f;
 
     // Membaca kemiringan (pitch & roll) dari MPU6050
     const ImuTelemetry imu = Imu().telemetry();
@@ -1112,6 +1139,15 @@ void processGamepad(ControllerPtr ctl) {
     // NO SNAP untuk driving: output proporsional, tidak loncat ke 35% (penyebab osilasi!)
     turnCommand = constrain(rawYawPid, -MAX_YAW_CORRECTION_PERCENT, MAX_YAW_CORRECTION_PERCENT)
                   * speedMultiplier;
+  }
+
+  // ── Slow rotate override ──────────────────────────────────────────────────
+  // Aktif saat modifier combo (R2+L1, R2+L2, L2+R1). Override yaw hold.
+  if (slowRotateActive) {
+    turnCommand     = slowRotateTurn * speedMultiplier;
+    yawTargetDeg    = imu.yawDeg;  // track heading baru terus
+    lastManualTurn  = true;
+    yawPid.reset();
   }
 
   driveRobot(xCommand, yCommand, turnCommand);
