@@ -40,31 +40,30 @@
 #define ENCODER_PPR_RR          195.10f
 
 // Max wheel RPM — roda depan vs belakang punya gearbox beda rasio.
-// Roda depan lebih lambat (rasio gearbox lebih tinggi → lebih torsi, lebih lambat).
-// Roda belakang lebih cepat (gearbox asli).
-// Nilai ini ceiling untuk PID; tuning lebih lanjut bisa via ramp test.
-#define MAX_WHEEL_RPM           80.0f    // ceiling aman untuk kedua jenis gearbox
-#define MAX_WHEEL_RPM_FRONT     60.0f   // roda depan (gearbox baru, lebih torsi)
-#define MAX_WHEEL_RPM_REAR      80.0f   // roda belakang (gearbox lama)
+// Ramp calibration 2026-06-24: FL=1273, FR=1254, RL=2806, RR=2816 RPM @ 100% PWM
+// Bottleneck = FR (1254 RPM). Pakai 1260 sebagai ceiling WheelSpeedController.
+#define MAX_WHEEL_RPM           1260.0f  // ceiling: limited by FR front wheel
+#define MAX_WHEEL_RPM_FRONT     1260.0f  // FL=1273, FR=1254 → pakai 1260
+#define MAX_WHEEL_RPM_REAR      2815.0f  // RL=2806, RR=2816 → pakai 2815
 
 // ─── Motor PWM Deadband ────────────────────────────────────────────────────────
 // Min PWM% sebelum roda mulai bergerak.
-// Setelah gearbox swap 2026-06-24:
-//   Roda depan (gearbox baru, torsi lebih tinggi) → perlu PWM lebih besar untuk mulai
-//   Roda belakang (gearbox lama) → sama seperti sebelumnya
-#define MOTOR_MIN_PWM_FL        18.0f   // terukur dari ramp sweep 2026-06-24 (ZK-5AD fix)
-#define MOTOR_MIN_PWM_FR        26.0f   // FR gearbox friction lebih tinggi, deadband lebih besar
-#define MOTOR_MIN_PWM_RL        20.0f
-#define MOTOR_MIN_PWM_RR        20.0f
+// Hasil ramp calibration 2026-06-24 (ZK-5AD channel fix, 12V, kosong):
+//   FL deadband 19.8% (raw=6500), FR 24.4% (raw=8000)
+//   RL deadband 19.8% (raw=6500), RR 24.4% (raw=8000)
+#define MOTOR_MIN_PWM_FL        20.0f   // ramp test 2026-06-24: 19.8%
+#define MOTOR_MIN_PWM_FR        25.0f   // ramp test 2026-06-24: 24.4%
+#define MOTOR_MIN_PWM_RL        20.0f   // ramp test 2026-06-24: 19.8%
+#define MOTOR_MIN_PWM_RR        25.0f   // ramp test 2026-06-24: 24.4%
 
-// PENTING: FL/FR pakai gearbox BARU (PPR 408 vs 193 untuk RL/RR).
-// Rasio PPR: 408/193 = 2.11x → FL/FR max RPM = RL max / 2.11 = 108/2.11 ≈ 51 RPM.
-// Feed-forward HARUS pakai nilai ini, bukan nilai lama (119/122)!
-// Kalau nilai ini salah → feed-forward kirim PWM berlebih → PID oscillate → patah-patah!
-#define MOTOR_MAX_RPM_FL        55.0f   // FL gearbox baru: 108/2.11 ≈ 51 RPM (pakai 55 sbg margin)
-#define MOTOR_MAX_RPM_FR        55.0f   // FR gearbox baru: sama dengan FL
-#define MOTOR_MAX_RPM_RL        108.0f  // RL gearbox lama, sudah dikalibrasi ramp test
-#define MOTOR_MAX_RPM_RR        110.0f  // RR gearbox lama, sudah dikalibrasi ramp test
+// Ramp calibration 2026-06-24 (ZK-5AD channel mapping fix):
+//   FL: 1273 RPM @ 100%, FR: 1254 RPM @ 100%
+//   RL: 2806 RPM @ 100%, RR: 2816 RPM @ 100%
+// Rasio RL/FL = 2806/1273 = 2.21x → sesuai rasio gearbox depan (lebih torsi, lebih lambat)
+#define MOTOR_MAX_RPM_FL        1280.0f  // ramp test 2026-06-24
+#define MOTOR_MAX_RPM_FR        1260.0f  // ramp test 2026-06-24
+#define MOTOR_MAX_RPM_RL        2810.0f  // ramp test 2026-06-24
+#define MOTOR_MAX_RPM_RR        2820.0f  // ramp test 2026-06-24
 
 // !! PERHATIAN - ENCODER GPIO LIMITATIONS:
 // FL (GPIO 16/17) dan FR (GPIO 25/26): punya internal pull-up → RELIABLE
