@@ -30,13 +30,13 @@ constexpr float MAX_DRIVE_PERCENT = 55.0f;
 constexpr float MAX_TURN_PERCENT = 42.0f;
 // Yaw correction: HARUS jauh di atas deadband FR=25%.
 // Terlalu kencang -> kurangi. Terlalu lemah -> naikkan. Osilasi -> turunkan KP di struct YawPid.
-constexpr float MAX_YAW_CORRECTION_PERCENT = 29.0f;
+constexpr float MAX_YAW_CORRECTION_PERCENT = 35.0f;
 // IDLE_YAW_HOLD: aktifkan agar right stick bisa aim bahkan saat robot diam.
 // Saat idle + right stick arah kanan → robot rotate ke kanan & hold.
 // Deadband 5°: stop koreksi kecil yang tidak bisa diaktuasi motor (batas fisik deadband motor ~17°).
 constexpr bool IDLE_YAW_HOLD_ENABLED_DEFAULT = true;
 constexpr float YAW_HOLD_DEADBAND_DEG = 5.0f;
-constexpr float IDLE_YAW_MAX_TURN_PERCENT = 29.0f;
+constexpr float IDLE_YAW_MAX_TURN_PERCENT = 35.0f;
 constexpr bool INVERT_MOVE_X = false;
 constexpr bool INVERT_MOVE_Y = true;
 constexpr bool INVERT_ROTATE = false;
