@@ -30,7 +30,7 @@ constexpr float MAX_DRIVE_PERCENT = 100.0f;
 constexpr float MAX_TURN_PERCENT = 20.0f;
 // Yaw correction: HARUS jauh di atas deadband FR=25%.
 // Terlalu kencang -> kurangi. Terlalu lemah -> naikkan. Osilasi -> turunkan KP di struct YawPid.
-constexpr float MAX_YAW_CORRECTION_PERCENT = 30.0f;  // DRIVING: 30% = koreksi cukup, speed theft min (100/(100+30)=77%)
+constexpr float MAX_YAW_CORRECTION_PERCENT = 35.0f;  // DRIVING: 35% koreksi yaw saat jalan
 // IDLE_YAW_HOLD: aktifkan agar right stick bisa aim bahkan saat robot diam.
 // Saat idle + right stick arah kanan → robot rotate ke kanan & hold.
 // Deadband 3°: stop koreksi kecil di bawah batas drift IMU.
@@ -77,6 +77,7 @@ float yawTargetDeg = 0.0f;
 float speedMultiplier = 1.0f; // Default full — Triangle=100%, Circle=50%
 bool yawHoldEnabled = true;
 bool idleYawHoldEnabled = IDLE_YAW_HOLD_ENABLED_DEFAULT;
+uint32_t lastModeChangeMs = 0;  // debounce: timestamp terakhir mode berubah
 bool yawCorrectionInverted = YAW_CORRECTION_INVERTED_DEFAULT;
 bool driveClosedLoopEnabled = DRIVE_CLOSED_LOOP_DEFAULT;
 bool fieldCentricEnabled = true;
@@ -1104,7 +1105,11 @@ void processGamepad(ControllerPtr ctl) {
           updateGripperConfigs();
           saveConfigurations();
           workR = -1.0f; workF = -1.0f;
-          robotMode = MODE_NORMAL; debMs = millis(); holdActive = false;
+          robotMode = MODE_NORMAL;
+          lastModeChangeMs = millis();  // debounce: cegah Square+Share langsung terbaca di normal mode
+          debMs = millis(); holdActive = false;
+          yawHoldEnabled = true;        // pastikan yaw lock tetap ON saat keluar calib
+          idleYawHoldEnabled = true;
           startGripperWiggle(3);
           Serial.printf("[LiftCalib] EXIT+SAVED\n");
         }
@@ -1268,7 +1273,7 @@ void processGamepad(ControllerPtr ctl) {
     // lifter auto ke 160° jadi leverage: bantu roda depan ngegrip, cegah keangkat.
     // Ramp lomba ~20° → deteksi mulai 10° agar antisipasi lebih awal.
     {
-      constexpr float    RAMP_PITCH_DEG  = 10.0f;   // tanjakan >10° mulai deteksi
+      constexpr float    RAMP_PITCH_DEG  = 45.0f;   // tanjakan >45° mulai deteksi stall
       constexpr uint32_t RAMP_HOLD_MS    = 1500;    // stuck >1.5 detik → aktif
       constexpr float    RAMP_LIFT_ANGLE = 160.0f;  // servo target leverage
 
@@ -1365,7 +1370,8 @@ void processGamepad(ControllerPtr ctl) {
 
   // Share + Square = toggle mode manual (tanpa IMU)
   // Berguna kalau IMU mati / glitch saat kompetisi
-  if (shareButton && squareButton && !lastSquareButton) {
+  if (shareButton && squareButton && !lastSquareButton
+      && millis() - lastModeChangeMs > 500) {  // debounce: abaikan sisa tombol dari calib exit
     bool manualMode = yawHoldEnabled || fieldCentricEnabled;
     yawHoldEnabled = !manualMode;
     idleYawHoldEnabled = !manualMode;
@@ -1375,7 +1381,8 @@ void processGamepad(ControllerPtr ctl) {
       (!manualMode) ? "NORMAL (IMU aktif)" : "MANUAL (IMU off, no field-centric)");
   }
   // Square saja = toggle mode heading lock / rotasi manual
-  else if (squareButton && !lastSquareButton && !shareButton) {
+  else if (squareButton && !lastSquareButton && !shareButton
+           && millis() - lastModeChangeMs > 500) {  // debounce: abaikan sisa tombol dari calib exit
     headingControlMode = !headingControlMode;
     yawTargetDeg = Imu().telemetry().yawDeg;
     yawPid.reset();
