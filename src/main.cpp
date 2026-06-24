@@ -28,15 +28,15 @@ constexpr float DPAD_MOVE_PERCENT = 40.0f;           // D-pad speed
 constexpr float MAX_DRIVE_PERCENT = 55.0f;
 // Max rotasi manual (stick kanan di headingControlMode=false)
 constexpr float MAX_TURN_PERCENT = 42.0f;
-// Yaw correction: HARUS jauh di atas deadband FR=25%. 42% → ada margin 17%.
-// Dulu 28% terlalu tipis → PID membunuh koreksi (motor barely move di 28%).
-constexpr float MAX_YAW_CORRECTION_PERCENT = 42.0f;
+// Yaw correction: HARUS jauh di atas deadband FR=25%.
+// Terlalu kencang -> kurangi nilai ini. Terlalu lemah -> naikkan.
+constexpr float MAX_YAW_CORRECTION_PERCENT = 30.0f;
 // IDLE_YAW_HOLD: aktifkan agar right stick bisa aim bahkan saat robot diam.
 // Saat idle + right stick arah kanan → robot rotate ke kanan & hold.
 // Deadband 3° mencegah IMU drift kecil memicu motor terus-menerus.
 constexpr bool IDLE_YAW_HOLD_ENABLED_DEFAULT = true;
 constexpr float YAW_HOLD_DEADBAND_DEG = 3.0f;
-constexpr float IDLE_YAW_MAX_TURN_PERCENT = 38.0f;     // > deadband FR=25%, margin aman
+constexpr float IDLE_YAW_MAX_TURN_PERCENT = 28.0f;     // > deadband FR=25%, tapi smooth
 constexpr bool INVERT_MOVE_X = false;
 constexpr bool INVERT_MOVE_Y = true;
 constexpr bool INVERT_ROTATE = false;
