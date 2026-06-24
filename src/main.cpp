@@ -30,7 +30,7 @@ constexpr float MAX_DRIVE_PERCENT = 100.0f;
 constexpr float MAX_TURN_PERCENT = 20.0f;
 // Yaw correction: HARUS jauh di atas deadband FR=25%.
 // Terlalu kencang -> kurangi. Terlalu lemah -> naikkan. Osilasi -> turunkan KP di struct YawPid.
-constexpr float MAX_YAW_CORRECTION_PERCENT = 20.0f;  // DRIVING: turunkan dari 45% → kurangi speed theft via MixOmni4 normalisasi
+constexpr float MAX_YAW_CORRECTION_PERCENT = 30.0f;  // DRIVING: 30% = koreksi cukup, speed theft min (100/(100+30)=77%)
 // IDLE_YAW_HOLD: aktifkan agar right stick bisa aim bahkan saat robot diam.
 // Saat idle + right stick arah kanan → robot rotate ke kanan & hold.
 // Deadband 3°: stop koreksi kecil di bawah batas drift IMU.
@@ -1406,7 +1406,7 @@ void processGamepad(ControllerPtr ctl) {
   {
     static uint32_t nosHoldStartMs = 0;
     static bool nosBoostActive     = false;
-    constexpr float NOS_BASE_MULT  = 0.85f;  // normal = 85% → kenceng tapi masih terkontrol
+    constexpr float NOS_BASE_MULT  = 1.00f;  // full power selalu — analog mentok = PWM mentok
     constexpr float NOS_BOOST_MULT = 1.00f;  // NOS = 100% full power (tahan stick mentok 2 detik)
     constexpr float NOS_THRESHOLD  = 88.0f;  // % dianggap "stick mentok"
     constexpr uint32_t NOS_HOLD_MS = 2000;   // tahan 2 detik untuk boost
