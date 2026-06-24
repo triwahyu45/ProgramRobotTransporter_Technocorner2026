@@ -1172,7 +1172,7 @@ void processGamepad(ControllerPtr ctl) {
     // R2 = lifter depan, L2 = lifter belakang (ditukar dari sebelumnya)
     // Jika slow rotate aktif dan L2 dipakai untuk rotasi, rear lifter tetap naik
     float targetFront = ctl && ctl->isConnected() ? (1.0f - triggerR2) : 1.0f;
-    float targetRear  = (ctl && ctl->isConnected() && !slowRotateActive) ? (1.0f - triggerL2) : 1.0f;
+    float targetRear  = ctl && ctl->isConnected() ? (1.0f - triggerL2) : 1.0f;  // L2 selalu turunkan rear lifter
 
     // Membaca kemiringan (pitch & roll) dari MPU6050
     const ImuTelemetry imu = Imu().telemetry();
