@@ -1441,8 +1441,8 @@ void processGamepad(ControllerPtr ctl) {
       float factor = constrain((pitch - HILL_PITCH_START) / (HILL_PITCH_FULL - HILL_PITCH_START),
                                0.0f, 1.0f);
       float boost = 1.0f + HILL_MAX_BOOST * factor;
-      xCommand = constrain(xCommand * boost, -1.0f, 1.0f);
-      yCommand = constrain(yCommand * boost, -1.0f, 1.0f);
+      xCommand = constrain(xCommand * boost, -100.0f, 100.0f);
+      yCommand = constrain(yCommand * boost, -100.0f, 100.0f);
       static uint32_t lastHillLog = 0;
       if (millis() - lastHillLog > 500) {
         Serial.printf("[Hill] pitch=%.1f° boost=x%.2f\n", pitch, boost);
