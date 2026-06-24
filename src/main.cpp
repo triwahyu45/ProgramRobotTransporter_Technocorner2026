@@ -935,7 +935,7 @@ void processGamepad(ControllerPtr ctl) {
   float ry = -ctl->axisRY(); // Negated so up is positive Y
   float mag = sqrtf(rx*rx + ry*ry);
   if (headingControlMode && mag > 200.0f) {
-    const float stickAngleDeg = atan2f(rx, ry) * RAD_TO_DEG;
+    const float stickAngleDeg = atan2f(-rx, ry) * RAD_TO_DEG;  // -rx: stick kanan = CW target = robot hadap kanan
     if (prevStickActive) {
       // Delta tracking: ikuti ARAH GERAK stick, bukan absolute angle.
       // Ini yang mencegah robot muter salah arah saat stick sweep melewati ±180°.
