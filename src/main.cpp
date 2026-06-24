@@ -33,9 +33,9 @@ constexpr float MAX_TURN_PERCENT = 42.0f;
 constexpr float MAX_YAW_CORRECTION_PERCENT = 29.0f;
 // IDLE_YAW_HOLD: aktifkan agar right stick bisa aim bahkan saat robot diam.
 // Saat idle + right stick arah kanan → robot rotate ke kanan & hold.
-// Deadband 3° mencegah IMU drift kecil memicu motor terus-menerus.
+// Deadband 5°: stop koreksi kecil yang tidak bisa diaktuasi motor (batas fisik deadband motor ~17°).
 constexpr bool IDLE_YAW_HOLD_ENABLED_DEFAULT = true;
-constexpr float YAW_HOLD_DEADBAND_DEG = 3.0f;
+constexpr float YAW_HOLD_DEADBAND_DEG = 5.0f;
 constexpr float IDLE_YAW_MAX_TURN_PERCENT = 29.0f;
 constexpr bool INVERT_MOVE_X = false;
 constexpr bool INVERT_MOVE_Y = true;
@@ -51,9 +51,9 @@ constexpr bool DRIVE_CLOSED_LOOP_DEFAULT = false;
 constexpr bool RESET_BLUETOOTH_PAIRING_ON_BOOT = false;
 
 struct YawPid {
-  float kp = 0.85f;   // turun dari 1.15 -> kurangi osilasi
+  float kp = 1.5f;    // naik dari 0.85: motor aktif saat error>17° (bukan >29°), lebih responsif deket target
   float ki = 0.0f;
-  float kd = 0.06f;   // naik dari 0.035 -> damping lebih kuat
+  float kd = 0.12f;   // naik dari 0.06: damping gyro lebih kuat, kurangi overshoot
   float integral = 0.0f;
   uint32_t lastUs = 0;
 
@@ -522,7 +522,9 @@ float yawPidUpdate(float targetDeg, float measuredDeg, float gyroZDegPerSec) {
   yawPid.lastUs = nowUs;
   if (dt <= 0.0f || dt > 0.2f) dt = 0.02f;
 
-  const float error = wrap180(targetDeg - measuredDeg);
+  // wrap180 pada KEDUANYA dulu sebelum hitung error.
+  // Kalau IMU akumulasi yaw tak terbatas (mis. 540°), wrap180(0-540)=-180 → robot muter setengah!
+  const float error = wrap180(wrap180(targetDeg) - wrap180(measuredDeg));
   yawPid.integral = constrain(yawPid.integral + error * dt * yawPid.ki, -12.0f, 12.0f);
 
   // Derivative on measurement, seperti referensi UNY: pakai gyro yaw rate, bukan selisih error kasar.
