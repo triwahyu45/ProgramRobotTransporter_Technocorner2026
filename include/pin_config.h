@@ -104,12 +104,12 @@
 // Kalau servo terpasang terbalik, tukar nilai MIN dan MAX.
 //
 // AngleClaw_Depan   (Servo3, GPIO14) — buka/tutup gripper DEPAN
-#define AngleClaw_Depan_MIN     85.0f   // buka / release (tuned)
-#define AngleClaw_Depan_MAX     108.0f  // tutup / gripping (tuned, anti-stall)
+#define AngleClaw_Depan_MIN     83.0f   // buka / release (NVS calibrated)
+#define AngleClaw_Depan_MAX     111.0f  // tutup / gripping (NVS calibrated)
 
 // AngleClaw_Belakang (Servo4, GPIO33) — buka/tutup gripper BELAKANG
-#define AngleClaw_Belakang_MIN  85.0f   // buka / release (tuned)
-#define AngleClaw_Belakang_MAX  108.0f  // tutup / gripping (samain depan)
+#define AngleClaw_Belakang_MIN  104.0f  // buka / release (NVS calibrated)
+#define AngleClaw_Belakang_MAX  118.0f  // tutup / gripping (NVS calibrated)
 
 // AngleLifter_Depan  (Servo1, GPIO12) — naik/turun lifter DEPAN
 #define AngleLifter_Depan_MIN   30.0f   // naik / angkat (diubah dari 0.0f agar agak kebawah)
