@@ -614,9 +614,8 @@ int16_t percentToRawCommand(float percent) {
 void driveRobotRawPercent(float x, float y, float turn) {
   SpeedController().setEnabled(false);
   const WheelCommand mix = MixOmni4(percentToRawCommand(x), percentToRawCommand(y), percentToRawCommand(turn));
-  // Scale rear: 0.55 (lebih dari rasio RPM 0.447) utk kompensasi load deadband rear yg lebih tinggi
-  // Yaw PID handle residual drift. 0.447 terlalu lemah under load (rear trailing).
-  constexpr float REAR_SCALE = 0.55f;
+  // Scale rear: 0.65 - rear masih trailing di 0.55, naik dikit. Yaw PID handle residual drift.
+  constexpr float REAR_SCALE = 0.65f;
   DriveAll(mix.fl, mix.fr,
            static_cast<int16_t>(mix.rl * REAR_SCALE),
            static_cast<int16_t>(mix.rr * REAR_SCALE));
