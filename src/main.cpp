@@ -854,7 +854,7 @@ void processGamepad(ControllerPtr ctl) {
     // R2 ditekan (front lifter): L1=CCW pelan, L2=CW pelan (L2 override rear lifter)
     // L2 ditekan (rear lifter):  R1=CW pelan
     // Speed pelan 25% — untuk fine positioning saat operasi gripper
-    constexpr float SLOW_ROT = 40.0f;
+    constexpr float SLOW_ROT = 55.0f;
     if (triggerR2 > 0.3f) {
       if (l1) {
         slowRotateActive = true;
