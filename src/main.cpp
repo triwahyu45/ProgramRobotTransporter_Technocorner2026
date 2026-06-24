@@ -1266,6 +1266,37 @@ void processGamepad(ControllerPtr ctl) {
 
     lastL1 = l1;  lastL2 = l2;
     lastR1 = r1;  lastR2 = r2;
+
+    // ── Hill Climbing Lifter Override ─────────────────────────────────────────
+    // Saat robot miring (nanjak/turun) > HILL_LIFT_PITCH_MIN dan BELUM kena anti-tip,
+    // paksa KEDUA lifter naik ke 160° agar tidak kepentok permukaan tanjakan.
+    // Saat kembali flat → lifter kembali normal (trigger-controlled).
+    {
+      constexpr float HILL_LIFT_PITCH_MIN = 10.0f;   // miring > 10° → aktifkan
+      constexpr float HILL_LIFT_ANGLE     = 160.0f;  // servo angle saat di tanjakan
+
+      const bool onHill = imu.ready && !Imu().isCalibrating()
+                       && fabsf(imu.pitchDeg) > HILL_LIFT_PITCH_MIN
+                       && !triggeredForward && !triggeredBackward;  // anti-tip punya prioritas
+
+      static bool wasOnHill = false;
+      if (onHill) {
+        servoLiftFront.setAngle(HILL_LIFT_ANGLE);
+        servoLiftRear.setAngle(HILL_LIFT_ANGLE);
+        if (!wasOnHill) {
+          Serial.printf("[HillLift] Miring %.1f deg -> lifter naik ke %.0f deg\n",
+                        imu.pitchDeg, HILL_LIFT_ANGLE);
+          wasOnHill = true;
+        }
+        lastTargetFront = -999.0f;  // force re-apply saat balik flat
+        lastTargetRear  = -999.0f;
+      } else if (wasOnHill) {
+        Serial.println("[HillLift] Flat kembali -> lifter posisi normal");
+        wasOnHill      = false;
+        lastTargetFront = -999.0f;  // paksa re-write ke posisi trigger normal
+        lastTargetRear  = -999.0f;
+      }
+    }
   }
   // ───────────────────────────────────────────────────────────────
 
