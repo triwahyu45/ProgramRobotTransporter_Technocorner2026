@@ -845,20 +845,32 @@ void processGamepad(ControllerPtr ctl) {
 
     const bool hasCtl = ctl && ctl->isConnected();
     const bool l3btn  = hasCtl && ctl->thumbL();
+    const bool r3btn  = hasCtl && ctl->thumbR();
 
-    // Toggle L3
-    if (l3btn && millis() - debL3 > 600) {
-      clawCalibMode = !clawCalibMode; debL3 = millis();
-      if (clawCalibMode) {
-        Serial.println("[ClawCalib] MODE ON!");
-        Serial.println("  L1=R-open++ | L2=R-open-- | R1=F-open++ | R2=F-open--");
-        Serial.println("  Share=save&keluar");
-      } else {
-        saveConfigurations();
-        Serial.printf("[ClawCalib] OFF (saved) F:%.0f->%.0f R:%.0f->%.0f\n",
-                      cfg_claw_depan_min, cfg_claw_depan_max,
-                      cfg_claw_belakang_min, cfg_claw_belakang_max);
+    // Toggle: tahan L3+R3 selama 3 detik
+    static uint32_t holdStartMs = 0;
+    static bool     holdActive  = false;
+    if (l3btn && r3btn) {
+      if (!holdActive) { holdActive = true; holdStartMs = millis(); }
+      uint32_t held = millis() - holdStartMs;
+      // Feedback serial tiap detik
+      if (held >= 1000 && held < 1050) Serial.println("[ClawCalib] Tahan L3+R3... 2 detik lagi");
+      if (held >= 2000 && held < 2050) Serial.println("[ClawCalib] Tahan L3+R3... 1 detik lagi");
+      if (held >= 3000 && millis() - debL3 > 500) {
+        clawCalibMode = !clawCalibMode; debL3 = millis(); holdActive = false;
+        if (clawCalibMode) {
+          Serial.println("[ClawCalib] MODE ON!");
+          Serial.println("  L1=R-open++ | L2=R-open-- | R1=F-open++ | R2=F-open--");
+          Serial.println("  Share=save | L3+R3 3det=keluar");
+        } else {
+          saveConfigurations();
+          Serial.printf("[ClawCalib] OFF (saved) F:%.0f->%.0f R:%.0f->%.0f\n",
+                        cfg_claw_depan_min, cfg_claw_depan_max,
+                        cfg_claw_belakang_min, cfg_claw_belakang_max);
+        }
       }
+    } else {
+      holdActive = false;
     }
 
     if (clawCalibMode && hasCtl) {
