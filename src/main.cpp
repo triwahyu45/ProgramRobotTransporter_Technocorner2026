@@ -614,9 +614,9 @@ int16_t percentToRawCommand(float percent) {
 void driveRobotRawPercent(float x, float y, float turn) {
   SpeedController().setEnabled(false);
   const WheelCommand mix = MixOmni4(percentToRawCommand(x), percentToRawCommand(y), percentToRawCommand(turn));
-  // REAR_SCALE: sementara 1.0 - yaw PID handle drift saat di lantai
-  // (scale 0.447 buat rear di bawah deadband saat nahan berat robot)
-  constexpr float REAR_SCALE = 1.0f;
+  // Scale rear: front=680RPM, rear=2500RPM → rear 3.6x lebih kuat di PWM sama → HARUS discale!
+  // 0.447 = 1260/2815 (rasio max RPM). Di MAX_DRIVE=80%: rear dapat 35.7% duty (>22.9% deadband ✓)
+  constexpr float REAR_SCALE = MAX_WHEEL_RPM_FRONT / MAX_WHEEL_RPM_REAR;  // ≈ 0.447
   DriveAll(mix.fl, mix.fr,
            static_cast<int16_t>(mix.rl * REAR_SCALE),
            static_cast<int16_t>(mix.rr * REAR_SCALE));
