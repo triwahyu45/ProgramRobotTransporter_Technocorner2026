@@ -30,16 +30,16 @@ constexpr float MAX_DRIVE_PERCENT = 75.0f;
 constexpr float MAX_TURN_PERCENT = 55.0f;
 // Yaw correction: HARUS jauh di atas deadband FR=25%.
 // Terlalu kencang -> kurangi. Terlalu lemah -> naikkan. Osilasi -> turunkan KP di struct YawPid.
-constexpr float MAX_YAW_CORRECTION_PERCENT = 50.0f;
+constexpr float MAX_YAW_CORRECTION_PERCENT = 65.0f;  // lebih cepat (was 50%)
 // IDLE_YAW_HOLD: aktifkan agar right stick bisa aim bahkan saat robot diam.
 // Saat idle + right stick arah kanan → robot rotate ke kanan & hold.
 // Deadband 3°: stop koreksi kecil di bawah batas drift IMU.
 // YAW_MIN_CORRECTION: snap output ke minimum ini agar motor PASTI bergerak (motor deadband ~25%).
 // Efek: robot hold heading kuat, error >3° selalu dikoreksi dengan MINIMUM 28% power.
-constexpr float YAW_HOLD_DEADBAND_DEG    = 3.0f;
-constexpr float YAW_MIN_CORRECTION_PERCENT = 28.0f;  // just above FR motor deadband (25%)
-constexpr bool IDLE_YAW_HOLD_ENABLED_DEFAULT = true;
-constexpr float IDLE_YAW_MAX_TURN_PERCENT = 50.0f;
+constexpr float YAW_HOLD_DEADBAND_DEG      = 2.0f;   // lebih presisi (was 3.0)
+constexpr float YAW_MIN_CORRECTION_PERCENT  = 35.0f;  // snap min: lebih dari deadband motor (was 28)
+constexpr bool  IDLE_YAW_HOLD_ENABLED_DEFAULT = true;
+constexpr float IDLE_YAW_MAX_TURN_PERCENT   = 55.0f;  // was 50
 constexpr bool INVERT_MOVE_X = false;
 constexpr bool INVERT_MOVE_Y = true;
 constexpr bool INVERT_ROTATE = false;
@@ -54,9 +54,9 @@ constexpr bool DRIVE_CLOSED_LOOP_DEFAULT = false;
 constexpr bool RESET_BLUETOOTH_PAIRING_ON_BOOT = false;
 
 struct YawPid {
-  float kp = 1.3f;   // turun dari 1.6: approach lebih pelan, kurangi overshoot
+  float kp = 1.20f;  // Autotune optimal (was 1.3)
   float ki = 0.0f;
-  float kd = 0.30f;  // naik dari 0.18: braking force 0.30x381=114% vs 0.18x381=68% - cukup rem
+  float kd = 0.40f;  // Autotune optimal: 11x lebih kuat = no overshoot (was 0.30)
   float integral  = 0.0f;
   float lastError = 0.0f;  // untuk hysteresis ±180° boundary
   uint32_t lastUs = 0;
@@ -1338,7 +1338,19 @@ void handleCommand(String line) {
     yawPid.ki = argOr(cmd, 1, yawPid.ki);
     yawPid.kd = argOr(cmd, 2, yawPid.kd);
     yawPid.reset();
+    // Simpan ke preferences agar tetap setelah reboot / ganti ESP32
+    cfg_pid_kp = yawPid.kp;
+    cfg_pid_ki = yawPid.ki;
+    cfg_pid_kd = yawPid.kd;
+    saveConfigurations();
+    Serial.printf("[PID] Saved: KP=%.3f KI=%.3f KD=%.3f\n", yawPid.kp, yawPid.ki, yawPid.kd);
     printConfig();
+  } else if (cmd.name == "save") {
+    cfg_pid_kp = yawPid.kp;
+    cfg_pid_ki = yawPid.ki;
+    cfg_pid_kd = yawPid.kd;
+    saveConfigurations();
+    Serial.println("[Save] Semua konfigurasi disimpan ke NVS.");
   } else if (cmd.name == "field") {
     if (line.endsWith(" on")) {
       fieldCentricEnabled = true;
