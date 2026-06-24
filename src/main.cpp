@@ -1616,6 +1616,15 @@ void loop() {
   } else {
     BP32.update();
     processGamepad(activeController);
+
+    // Fallback: saat tidak ada stick (ctl=nullptr), idleYawHoldOrBrake tidak terpanggil
+    // dari processGamepad. Panggil langsung agar heading serial command tetap bekerja.
+    const bool noStick = (activeController == nullptr || !activeController->isConnected());
+    if (noStick && !calibLockActive) {
+      const ImuTelemetry imu = Imu().telemetry();
+      idleYawHoldOrBrake(imu);
+    }
+
     UpdateWheelSpeedController();
   }
 
