@@ -107,8 +107,6 @@ float cfg_lift_depan_max = AngleLifter_Depan_MAX;
 float cfg_lift_belakang_min = AngleLifter_Belakang_MIN;
 float cfg_lift_belakang_max = AngleLifter_Belakang_MAX;
 
-#define ANTITIP_PITCH_FORWARD_LIMIT     30.0f   // Batas kemiringan jatuh ke depan (turun dari 45)
-#define ANTITIP_PITCH_BACKWARD_LIMIT   -30.0f   // Batas kemiringan jatuh ke belakang (turun dari -45)
 float cfg_antitip_pitch_forward = ANTITIP_PITCH_FORWARD_LIMIT;
 float cfg_antitip_pitch_backward = ANTITIP_PITCH_BACKWARD_LIMIT;
 float cfg_antitip_roll = ANTITIP_ROLL_LIMIT;
