@@ -843,14 +843,14 @@ void processGamepad(ControllerPtr ctl) {
     static uint32_t tickMs        = 0;
     static uint32_t printMs       = 0;
 
-    const bool hasCtl = ctl && ctl->isConnected();
-    const bool l3btn  = hasCtl && ctl->thumbL();
-    const bool r3btn  = hasCtl && ctl->thumbR();
+    const bool hasCtl  = ctl && ctl->isConnected();
+    // Square (x) + Circle (b) ditahan 3 detik — face buttons, aman tidak gerak robot
+    const bool calibBtn = hasCtl && ctl->x() && ctl->b();
 
-    // Toggle: tahan L3+R3 selama 3 detik
+    // Toggle: tahan Square+Circle selama 3 detik
     static uint32_t holdStartMs = 0;
     static bool     holdActive  = false;
-    if (l3btn && r3btn) {
+    if (calibBtn) {
       if (!holdActive) { holdActive = true; holdStartMs = millis(); }
       uint32_t held = millis() - holdStartMs;
       // Feedback serial tiap detik
@@ -1792,6 +1792,13 @@ void onDisconnectedController(ControllerPtr ctl) {
   if (ctl == activeController) {
     activeController = nullptr;
   }
+  // Reset ke state seperti baru nyala: matiin yaw lock & calib lock
+  // supaya robot bisa diangkat/dipindah tanpa motor melawan
+  yawHoldEnabled     = false;
+  idleYawHoldEnabled = false;
+  calibLockActive    = false;
+  yawPid.reset();
+  Serial.println("[Disconnect] Yaw lock & calib lock dimatikan. Robot bebas diangkat.");
   stopWithBrake();
 }
 
