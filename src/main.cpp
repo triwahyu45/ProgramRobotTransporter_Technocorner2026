@@ -645,6 +645,17 @@ void toggleYawHoldFromGamepad() {
   Serial.println(yawHoldEnabled ? "ON" : "OFF");
 }
 
+// ─── Gripper wiggle: feedback visual/taktil untuk event penting ───
+// times=1: "combo terdeteksi", times=2: "memulai", times=3: "selesai"
+void gripperWiggle(int times = 2) {
+  const bool fc = gripperFront.isClawClosed();
+  const bool rc = gripperRear.isClawClosed();
+  for (int i = 0; i < times; i++) {
+    gripperFront.setClaw(!fc); gripperRear.setClaw(!rc); delay(130);
+    gripperFront.setClaw(fc);  gripperRear.setClaw(rc);  delay(130);
+  }
+}
+
 void processGamepad(ControllerPtr ctl) {
   static uint32_t lastLedUpdateMs = 0;
   static uint8_t lastBatteryLevel = 255;
@@ -721,17 +732,30 @@ void processGamepad(ControllerPtr ctl) {
     wifiConfigTriggerMs = 0;
   }
 
-  // ─── Trigger IMU Gyro Calibration (L1 + R1 + Share + Options ditahan 3 detik) ───
+  // ─── Trigger IMU Gyro Calibration (L1 + R1 + Share + Options ditahan 2 detik) ───
   static uint32_t imuCalibTriggerStartMs = 0;
+  static uint32_t imuCalibLastBeepMs = 0;
   if (ctl && ctl->isConnected() && ctl->l1() && ctl->r1() && ctl->miscSelect() && ctl->miscStart()) {
     if (imuCalibTriggerStartMs == 0) {
       imuCalibTriggerStartMs = millis();
-      Serial.println("[System] L1+R1+Share+Options ditekan. Tahan 3 detik untuk kalibrasi Gyro...");
-    } else if (millis() - imuCalibTriggerStartMs > 3000) {
-      Serial.println("[System] Memulai Kalibrasi Gyro dari Gamepad...");
-      stopWithBrake();
-      Imu().startGyroCalibration();
-      imuCalibTriggerStartMs = 0;
+      imuCalibLastBeepMs = 0;
+      gripperWiggle(1);  // 1 wiggle = combo terdeteksi, mulai tahan!
+      Serial.println("[Calib] L1+R1+Share+Options terdeteksi. Tahan 2 detik...");
+    } else {
+      uint32_t held = millis() - imuCalibTriggerStartMs;
+      // Countdown tiap detik via serial
+      if (held > 1000 && imuCalibLastBeepMs < 1000) {
+        imuCalibLastBeepMs = 1000;
+        Serial.println("[Calib] 1 detik lagi...");
+      }
+      if (held > 2000) {
+        gripperWiggle(2);  // 2 wiggles = mulai kalibrasi!
+        Serial.println("[Calib] Memulai Kalibrasi IMU - robot harus DIAM!");
+        stopWithBrake();
+        Imu().startGyroCalibration();
+        imuCalibTriggerStartMs = 0;
+        imuCalibLastBeepMs = 0;
+      }
     }
   } else {
     imuCalibTriggerStartMs = 0;
@@ -1519,6 +1543,16 @@ void loop() {
     processGamepad(activeController);
     UpdateWheelSpeedController();
   }
+
+  // Detect calibration selesai → 3 wiggles sebagai tanda
+  static bool wasCalibrating = false;
+  const bool nowCalibrating = Imu().isCalibrating();
+  if (wasCalibrating && !nowCalibrating) {
+    Serial.println("[Calib] Kalibrasi IMU SELESAI! Gyro & Accel terkalibrasi.");
+    gripperWiggle(3);  // 3 wiggles = kalibrasi selesai!
+    zeroYawTarget();   // reset yaw target ke 0 setelah kalibrasi
+  }
+  wasCalibrating = nowCalibrating;
 
   const uint32_t nowMs = millis();
   if (telemetryEnabled && nowMs - lastTelemetryMs >= TELEMETRY_PERIOD_MS) {
