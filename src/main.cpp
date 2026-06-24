@@ -20,7 +20,7 @@ constexpr const char *ALLOWED_CONTROLLER_BTADDR = "f7:87:e0:28:75:18";
 constexpr uint16_t PCA_MOTOR_PWM_FREQ_HZ = 1500;
 constexpr uint32_t TELEMETRY_PERIOD_MS = 500;
 constexpr uint32_t SERIAL_LINE_TIMEOUT_MS = 80;
-constexpr int STICK_DEADZONE = 60;
+constexpr int STICK_DEADZONE = 120;  // dinaikkan dari 60: stick drift bikin FR+RL jalan sendiri
 constexpr int STICK_MAX = 512;
 constexpr float DPAD_MOVE_PERCENT = 40.0f;           // D-pad speed
 constexpr float MAX_DRIVE_PERCENT = 40.0f;           // 40% × 80 RPM = 32 RPM target, FL mampu (max 55)
