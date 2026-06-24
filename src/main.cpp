@@ -40,7 +40,7 @@ constexpr float IDLE_YAW_MAX_TURN_PERCENT = 29.0f;
 constexpr bool INVERT_MOVE_X = false;
 constexpr bool INVERT_MOVE_Y = true;
 constexpr bool INVERT_ROTATE = false;
-constexpr bool YAW_CORRECTION_INVERTED_DEFAULT = false;  // flip: kanan harusnya rotate kanan
+constexpr bool YAW_CORRECTION_INVERTED_DEFAULT = true;   // true = arah koreksi benar
 
 // DRIVE_CLOSED_LOOP: DEFAULT = false (open-loop) karena motor ZK-5AD punya respons non-linear.
 // Di RPM rendah (<50% PWM), actual RPM JAUH lebih tinggi dari prediksi linear feedforward.
@@ -51,10 +51,11 @@ constexpr bool DRIVE_CLOSED_LOOP_DEFAULT = false;
 constexpr bool RESET_BLUETOOTH_PAIRING_ON_BOOT = false;
 
 struct YawPid {
-  float kp = 1.5f;    // naik dari 0.85: motor aktif saat error>17° (bukan >29°), lebih responsif deket target
+  float kp = 1.5f;
   float ki = 0.0f;
-  float kd = 0.12f;   // naik dari 0.06: damping gyro lebih kuat, kurangi overshoot
-  float integral = 0.0f;
+  float kd = 0.12f;
+  float integral  = 0.0f;
+  float lastError = 0.0f;  // untuk hysteresis ±180° boundary
   uint32_t lastUs = 0;
 
   void reset() {
@@ -524,7 +525,14 @@ float yawPidUpdate(float targetDeg, float measuredDeg, float gyroZDegPerSec) {
 
   // wrap180 pada KEDUANYA dulu sebelum hitung error.
   // Kalau IMU akumulasi yaw tak terbatas (mis. 540°), wrap180(0-540)=-180 → robot muter setengah!
-  const float error = wrap180(wrap180(targetDeg) - wrap180(measuredDeg));
+  float error = wrap180(wrap180(targetDeg) - wrap180(measuredDeg));
+
+  // Hysteresis ±180° boundary: mencegah chattering saat target tepat berlawanan dengan robot.
+  // Tanpa ini: yaw -47 vs -48 bikin error berganti +179/-179 tiap 0.5s → motor balik-balik arah.
+  if (fabsf(error) > 170.0f && fabsf(yawPid.lastError) > 170.0f && error * yawPid.lastError < 0.0f) {
+    error = yawPid.lastError;  // pertahankan arah sebelumnya agar tidak flip
+  }
+  yawPid.lastError = error;
   yawPid.integral = constrain(yawPid.integral + error * dt * yawPid.ki, -12.0f, 12.0f);
 
   // Derivative on measurement, seperti referensi UNY: pakai gyro yaw rate, bukan selisih error kasar.
