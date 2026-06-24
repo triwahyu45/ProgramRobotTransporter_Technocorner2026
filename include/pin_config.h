@@ -143,25 +143,36 @@
 #define ADDR_PCA9685        0x40
 #define ADDR_MPU6050        0x68
 
-// PCA9685 -> 4x TB6612FNG channel mapping.
-// STBY on every TB6612FNG module is tied to VCC/3V3 in hardware.
-#define M1_IN2              0       // Front-Left
-#define M1_IN1              1
-#define M1_PWM              2
+// PCA9685 → 2x ZK-5AD (TA6586) channel mapping.
+// ZK-5AD hanya butuh 2 pin per motor (D0/D1 = Motor A, D2/D3 = Motor B).
+// Driver depan (ZK-5AD #1): CH0-CH3
+//   D0=CH0, D1=CH1 → Motor Front-Left
+//   D2=CH2, D3=CH3 → Motor Front-Right
+// Driver belakang (ZK-5AD #2): CH4-CH7
+//   D0=CH4, D1=CH5 → Motor Rear-Left
+//   D2=CH6, D3=CH7 → Motor Rear-Right
+//
+// TIDAK ADA pin PWM/ENA terpisah! Speed dikontrol via duty cycle di IN1 atau IN2.
+// PCA_DUMMY_PWM = channel 12 (spare, tidak tersambung) dipakai sebagai placeholder.
+#define PCA_DUMMY_PWM       12  // spare channel, tidak tersambung ke apapun
 
-#define M2_IN2              3       // Front-Right
-#define M2_IN1              4
-#define M2_PWM              5
+#define M1_IN2              0       // Front-Left  (D0 driver depan)
+#define M1_IN1              1       //             (D1 driver depan)
+#define M1_PWM              PCA_DUMMY_PWM
 
-#define M3_IN2              6       // Rear-Left
-#define M3_IN1              7
-#define M3_PWM              8
+#define M2_IN2              2       // Front-Right (D2 driver depan)
+#define M2_IN1              3       //             (D3 driver depan)
+#define M2_PWM              PCA_DUMMY_PWM
 
-#define M4_IN2              9       // Rear-Right
-#define M4_IN1              10
-#define M4_PWM              11
+#define M3_IN2              4       // Rear-Left   (D0 driver belakang)
+#define M3_IN1              5       //             (D1 driver belakang)
+#define M3_PWM              PCA_DUMMY_PWM
 
-#define PCA_SPARE_12        12
+#define M4_IN2              6       // Rear-Right  (D2 driver belakang)
+#define M4_IN1              7       //             (D3 driver belakang)
+#define M4_PWM              PCA_DUMMY_PWM
+
 #define PCA_SPARE_13        13
 #define PCA_SPARE_14        14
 #define PCA_SPARE_15        15
+

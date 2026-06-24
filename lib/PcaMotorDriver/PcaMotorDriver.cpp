@@ -57,7 +57,7 @@ void PcaTb6612Motor::drive(int16_t value) {
 
   // ZK-5AD (TA6586): tidak ada pin ENA/ENB terpisah.
   // Speed dikontrol dengan mengirim PWM langsung ke IN1 (forward)
-  // atau IN2 (backward). Pin PWM (channel ke-3) tidak digunakan.
+  // atau IN2 (backward). Pin PWM (ENA) harus HIGH agar driver aktif.
   if (forward) {
     channelDuty(_pins.in1, duty);  // IN1 = PWM duty (speed)
     channelOff(_pins.in2);          // IN2 = LOW
@@ -65,7 +65,7 @@ void PcaTb6612Motor::drive(int16_t value) {
     channelOff(_pins.in1);          // IN1 = LOW
     channelDuty(_pins.in2, duty);  // IN2 = PWM duty (speed)
   }
-  channelOff(_pins.pwm);  // Tidak dipakai ZK-5AD
+  channelOn(_pins.pwm);  // ENA harus HIGH agar ZK-5AD aktif
 }
 
 void PcaTb6612Motor::brake() {
@@ -74,9 +74,10 @@ void PcaTb6612Motor::brake() {
   }
 
   // ZK-5AD (TA6586) brake: IN1=HIGH, IN2=HIGH = short brake.
+  // ENA (PWM pin) HARUS HIGH agar brake mode aktif — jika LOW, motor coast!
   channelOn(_pins.in1);
   channelOn(_pins.in2);
-  channelOff(_pins.pwm);  // Tidak dipakai ZK-5AD
+  channelOn(_pins.pwm);  // ENA=HIGH agar brake bekerja
 }
 
 void PcaTb6612Motor::coast() {
