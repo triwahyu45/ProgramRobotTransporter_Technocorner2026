@@ -51,9 +51,9 @@ constexpr bool DRIVE_CLOSED_LOOP_DEFAULT = false;
 constexpr bool RESET_BLUETOOTH_PAIRING_ON_BOOT = false;
 
 struct YawPid {
-  float kp = 1.6f;   // naik dari 1.4: lebih responsif heading lock
+  float kp = 1.3f;   // turun dari 1.6: approach lebih pelan, kurangi overshoot
   float ki = 0.0f;
-  float kd = 0.18f;  // naik dari 0.12: damping lebih kuat biar gak overshoot
+  float kd = 0.30f;  // naik dari 0.18: braking force 0.30x381=114% vs 0.18x381=68% - cukup rem
   float integral  = 0.0f;
   float lastError = 0.0f;  // untuk hysteresis ±180° boundary
   uint32_t lastUs = 0;
