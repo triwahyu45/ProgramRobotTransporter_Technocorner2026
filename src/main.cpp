@@ -1105,15 +1105,12 @@ void processGamepad(ControllerPtr ctl) {
       lastManualTurn = false;
     }
     // Clamp yaw PID output saat driving: batasi agar tidak swing/osilasi
-    // IDLE pakai IDLE_YAW_MAX=100%, DRIVING pakai MAX_YAW_CORRECTION=45%
-    // Skala dengan speedMultiplier SETELAH clamp (bukan sebelum) agar cap efektif
+    // IDLE pakai IDLE_YAW_MAX=100% + snap, DRIVING pakai 45% TANPA snap
+    // Saat driving motor sudah muter dari movement → tidak perlu snap untuk overcome deadband
     const float rawYawPid = yawPidUpdate(yawTargetDeg, imu.yawDeg, imu.gyroZ);
-    const float rawYaw = constrain(rawYawPid, -MAX_YAW_CORRECTION_PERCENT, MAX_YAW_CORRECTION_PERCENT)
-                         * speedMultiplier;
-    // Snap: selalu pastikan output di atas motor deadband
-    turnCommand = (fabsf(rawYaw) > 0.5f && fabsf(rawYaw) < YAW_MIN_CORRECTION_PERCENT)
-        ? copysignf(YAW_MIN_CORRECTION_PERCENT, rawYaw)
-        : rawYaw;
+    // NO SNAP untuk driving: output proporsional, tidak loncat ke 35% (penyebab osilasi!)
+    turnCommand = constrain(rawYawPid, -MAX_YAW_CORRECTION_PERCENT, MAX_YAW_CORRECTION_PERCENT)
+                  * speedMultiplier;
   }
 
   driveRobot(xCommand, yCommand, turnCommand);
