@@ -1191,12 +1191,12 @@ void processGamepad(ControllerPtr ctl) {
     if (ANTITIP_ENABLED && imu.ready && !Imu().isCalibrating()) {
       // 1. Jatuh ke depan (kemiringan pitch positif melebihi batas)
       if (imu.pitchDeg > cfg_antitip_pitch_forward) {
-        targetFront = 0.0f; // Paksa Front Lifter DOWN
+        targetFront = 0.0f; // Paksa Front Lifter DOWN (160°)
         triggeredForward = true;
       }
       // 2. Jatuh ke belakang (kemiringan pitch negatif melebihi batas)
       else if (imu.pitchDeg < cfg_antitip_pitch_backward) {
-        targetRear = 0.0f;  // Paksa Rear Lifter DOWN
+        targetRear = 0.0f;  // Paksa Rear Lifter DOWN (160°)
         triggeredBackward = true;
       }
 
@@ -1238,65 +1238,30 @@ void processGamepad(ControllerPtr ctl) {
 
     // Front Lifter
     if (targetFront != lastTargetFront) {
-      gripperFront.setLifter(targetFront);
-      lastTargetFront = targetFront;
-      
       if (triggeredForward) {
-        Serial.printf("[Anti-Tip] Jatuh ke DEPAN terdeteksi! Pitch: %.1f. Lifter DEPAN turun.\n", imu.pitchDeg);
-      } else if (triggeredSideways) {
-        Serial.printf("[Anti-Tip] Jatuh SAMPING terdeteksi! Roll: %.1f. Lifter DEPAN turun ke %.2f agar tidak kepentok.\n", imu.rollDeg, targetFront);
+        servoLiftFront.setAngle(160.0f);  // anti-tip: 160°
+        Serial.printf("[Anti-Tip] Jatuh ke DEPAN! Pitch: %.1f. Lifter DEPAN -> 160 deg\n", imu.pitchDeg);
       } else {
+        gripperFront.setLifter(targetFront);
         Serial.printf("[Gripper] Depan lifter set ke: %s\n", targetFront == 0.0f ? "DOWN" : "UP");
       }
+      lastTargetFront = targetFront;
     }
 
     // Rear Lifter
     if (targetRear != lastTargetRear) {
-      gripperRear.setLifter(targetRear);
-      lastTargetRear = targetRear;
-
       if (triggeredBackward) {
-        Serial.printf("[Anti-Tip] Jatuh ke BELAKANG terdeteksi! Pitch: %.1f. Lifter BELAKANG turun.\n", imu.pitchDeg);
-      } else if (triggeredSideways) {
-        Serial.printf("[Anti-Tip] Jatuh SAMPING terdeteksi! Roll: %.1f. Lifter BELAKANG turun ke %.2f agar tidak kepentok.\n", imu.rollDeg, targetRear);
+        servoLiftRear.setAngle(160.0f);  // anti-tip: 160°
+        Serial.printf("[Anti-Tip] Jatuh ke BELAKANG! Pitch: %.1f. Lifter BELAKANG -> 160 deg\n", imu.pitchDeg);
       } else {
+        gripperRear.setLifter(targetRear);
         Serial.printf("[Gripper] Belakang lifter set ke: %s\n", targetRear == 0.0f ? "DOWN" : "UP");
       }
+      lastTargetRear = targetRear;
     }
 
     lastL1 = l1;  lastL2 = l2;
     lastR1 = r1;  lastR2 = r2;
-
-    // ── Hill Climbing Lifter Override ─────────────────────────────────────────
-    // Saat robot miring (nanjak/turun) > HILL_LIFT_PITCH_MIN dan BELUM kena anti-tip,
-    // paksa KEDUA lifter naik ke 160° agar tidak kepentok permukaan tanjakan.
-    // Saat kembali flat → lifter kembali normal (trigger-controlled).
-    {
-      constexpr float HILL_LIFT_PITCH_MIN = 15.0f;   // miring > 15° → aktifkan (was 10° terlalu sensitif)
-      constexpr float HILL_LIFT_ANGLE     = 160.0f;  // servo angle saat di tanjakan
-
-      const bool onHill = imu.ready && !Imu().isCalibrating()
-                       && fabsf(imu.pitchDeg) > HILL_LIFT_PITCH_MIN
-                       && !triggeredForward && !triggeredBackward;  // anti-tip punya prioritas
-
-      static bool wasOnHill = false;
-      if (onHill) {
-        servoLiftFront.setAngle(HILL_LIFT_ANGLE);
-        servoLiftRear.setAngle(HILL_LIFT_ANGLE);
-        if (!wasOnHill) {
-          Serial.printf("[HillLift] Miring %.1f deg -> lifter naik ke %.0f deg\n",
-                        imu.pitchDeg, HILL_LIFT_ANGLE);
-          wasOnHill = true;
-        }
-        lastTargetFront = -999.0f;  // force re-apply saat balik flat
-        lastTargetRear  = -999.0f;
-      } else if (wasOnHill) {
-        Serial.println("[HillLift] Flat kembali -> lifter posisi normal");
-        wasOnHill      = false;
-        lastTargetFront = -999.0f;  // paksa re-write ke posisi trigger normal
-        lastTargetRear  = -999.0f;
-      }
-    }
   }
   // ───────────────────────────────────────────────────────────────
 
