@@ -1420,30 +1420,50 @@ void handleCommand(String line) {
     saveConfigurations();
     Serial.println("[Save] Semua konfigurasi disimpan ke NVS.");
   } else if (cmd.name == "claw") {
-    // Usage: claw reset | claw OPEN_ANGLE | claw (tampilkan nilai)
+    // Usage: claw reset | claw open ANGLE | claw close ANGLE | claw r close ANGLE | claw ANGLE
     if (line.endsWith(" reset")) {
       cfg_claw_depan_min    = AngleClaw_Depan_MIN;
       cfg_claw_depan_max    = AngleClaw_Depan_MAX;
       cfg_claw_belakang_min = AngleClaw_Belakang_MIN;
       cfg_claw_belakang_max = AngleClaw_Belakang_MAX;
-      saveConfigurations();
-      updateGripperConfigs();
-      Serial.printf("[Claw] Reset! open=%.1f close=%.1f (keduanya)\n",
-                    cfg_claw_depan_min, cfg_claw_depan_max);
+      saveConfigurations(); updateGripperConfigs();
+      Serial.printf("[Claw] Reset! open=%.1f close=%.1f\n", cfg_claw_depan_min, cfg_claw_depan_max);
+    } else if (line.startsWith("claw open ") || line.startsWith("claw o ")) {
+      // claw open ANGLE — buka kedua claw
+      float ang = argOr(cmd, 1, cfg_claw_depan_min);
+      cfg_claw_depan_min = cfg_claw_belakang_min = ang;
+      saveConfigurations(); updateGripperConfigs();
+      Serial.printf("[Claw] Open -> %.1f deg (range %.1f)\n", ang, cfg_claw_depan_max - ang);
+    } else if (line.startsWith("claw close ") || line.startsWith("claw c ")) {
+      // claw close ANGLE — tutup kedua claw (grip lebih kuat)
+      float ang = argOr(cmd, 1, cfg_claw_depan_max);
+      cfg_claw_depan_max = cfg_claw_belakang_max = ang;
+      saveConfigurations(); updateGripperConfigs();
+      Serial.printf("[Claw] Close -> %.1f deg (range %.1f)\n", ang, ang - cfg_claw_depan_min);
+    } else if (line.startsWith("claw r close ") || line.startsWith("claw r c ")) {
+      // claw r close ANGLE — close angle claw belakang (R1) saja
+      float ang = argOr(cmd, 2, cfg_claw_belakang_max);
+      cfg_claw_belakang_max = ang;
+      saveConfigurations(); updateGripperConfigs();
+      Serial.printf("[Claw] Belakang close -> %.1f deg (range %.1f)\n", ang, ang - cfg_claw_belakang_min);
+    } else if (line.startsWith("claw f close ") || line.startsWith("claw f c ")) {
+      // claw f close ANGLE — close angle claw depan (L1) saja
+      float ang = argOr(cmd, 2, cfg_claw_depan_max);
+      cfg_claw_depan_max = ang;
+      saveConfigurations(); updateGripperConfigs();
+      Serial.printf("[Claw] Depan close -> %.1f deg (range %.1f)\n", ang, ang - cfg_claw_depan_min);
     } else if (cmd.args[0] > 0.0f) {
-      // claw ANGLE: set sudut buka kedua claw sekaligus
+      // claw ANGLE — shorthand: set open angle keduanya
       float openAng = argOr(cmd, 0, cfg_claw_depan_min);
-      cfg_claw_depan_min    = openAng;
-      cfg_claw_belakang_min = openAng;
-      saveConfigurations();
-      updateGripperConfigs();
-      Serial.printf("[Claw] Open angle -> %.1f deg (range buka = %.1f deg)\n",
-                    openAng, cfg_claw_depan_max - openAng);
+      cfg_claw_depan_min = cfg_claw_belakang_min = openAng;
+      saveConfigurations(); updateGripperConfigs();
+      Serial.printf("[Claw] Open angle -> %.1f deg (range %.1f)\n", openAng, cfg_claw_depan_max - openAng);
     } else {
       Serial.printf("[Claw] Depan   : open=%.1f close=%.1f\n", cfg_claw_depan_min, cfg_claw_depan_max);
       Serial.printf("[Claw] Belakang: open=%.1f close=%.1f\n", cfg_claw_belakang_min, cfg_claw_belakang_max);
-      Serial.println("Usage: claw reset | claw ANGLE");
+      Serial.println("Usage: claw reset | claw ANGLE | claw open A | claw close A | claw r close A | claw f close A");
     }
+
 
   } else if (cmd.name == "field") {
     if (line.endsWith(" on")) {
