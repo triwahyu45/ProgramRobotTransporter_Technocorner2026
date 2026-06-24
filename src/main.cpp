@@ -106,7 +106,11 @@ float cfg_antitip_roll_throttle = ANTITIP_ROLL_LIFTER_THROTTLE;
 
 // State globals for telemetry & tracking
 float lastTargetFront = 1.0f;
-float lastTargetRear = 1.0f;
+float lastTargetRear  = 1.0f;
+
+// Delta tracking untuk right stick heading (hindari jump di ±180° boundary)
+float prevStickAngleDeg = 0.0f;  // sudut stick sebelumnya
+bool  prevStickActive   = false; // apakah stick aktif di frame sebelumnya
 
 // ─── Servo & Gripper ─────────────────────────────────────────────────────────
 ServoESP32 servoLiftFront;   // Servo1 GPIO12 — lifter depan
@@ -931,7 +935,20 @@ void processGamepad(ControllerPtr ctl) {
   float ry = -ctl->axisRY(); // Negated so up is positive Y
   float mag = sqrtf(rx*rx + ry*ry);
   if (headingControlMode && mag > 200.0f) {
-    yawTargetDeg = atan2f(rx, ry) * RAD_TO_DEG;
+    const float stickAngleDeg = atan2f(rx, ry) * RAD_TO_DEG;
+    if (prevStickActive) {
+      // Delta tracking: ikuti ARAH GERAK stick, bukan absolute angle.
+      // Ini yang mencegah robot muter salah arah saat stick sweep melewati ±180°.
+      const float delta = wrap180(stickAngleDeg - prevStickAngleDeg);
+      yawTargetDeg = wrap180(yawTargetDeg + delta);
+    } else {
+      // Stick baru aktif: langsung set ke angle absolut stick sebagai starting point
+      yawTargetDeg = stickAngleDeg;
+    }
+    prevStickAngleDeg = stickAngleDeg;
+    prevStickActive   = true;
+  } else {
+    prevStickActive = false;
   }
 
   float rotate = headingControlMode ? 0.0f : axisToPercent(ctl->axisRX());
