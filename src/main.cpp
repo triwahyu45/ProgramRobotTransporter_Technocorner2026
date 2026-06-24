@@ -27,7 +27,7 @@ constexpr float DPAD_MOVE_PERCENT = 40.0f;           // D-pad speed
 // 55% = cukup cepat tanpa terlalu agresif. Kalau terlalu cepat, turunkan ke 45%.
 constexpr float MAX_DRIVE_PERCENT = 85.0f;
 // Max rotasi manual (stick kanan di headingControlMode=false)
-constexpr float MAX_TURN_PERCENT = 40.0f;
+constexpr float MAX_TURN_PERCENT = 30.0f;
 // Yaw correction: HARUS jauh di atas deadband FR=25%.
 // Terlalu kencang -> kurangi. Terlalu lemah -> naikkan. Osilasi -> turunkan KP di struct YawPid.
 constexpr float MAX_YAW_CORRECTION_PERCENT = 45.0f;  // DRIVING: batas saat gerak, tidak dominasi movement
